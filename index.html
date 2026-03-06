@@ -1040,7 +1040,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                 <thead>
                   <tr>
                     <th>#</th><th>Grupo</th><th>Estado</th>
-                    <th>Result. Lotería</th><th>Gastos</th><th>Total</th>
+                    <th title="Ventas − Premios − Comisiones">Res. Lotería</th><th title="Solo gastos tipo Operativo">Gastos Op.</th><th title="Participación del supervisor">Participación</th><th title="Res. Lotería − Gastos − Participación">Res. Período</th>
                     <th>Pend. Anterior</th><th>Acumulado</th>
                     <th>Salidas</th><th>Entradas</th>
                     <th>T. Cierre</th><th>Depositado</th>
@@ -1065,8 +1065,9 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                     </td>
                     <td :class="r.resultado_loteria>=0?'num-pos':'num-neg'">{{ fmt(r.resultado_loteria) }}</td>
                     <td class="num-neg">{{ fmt(r.total_gastos) }}</td>
-                    <td :class="(r.resultado_loteria-r.total_gastos)>=0?'num-pos':'num-neg'">
-                      {{ fmt(r.resultado_loteria - r.total_gastos) }}
+                    <td :class="r.participacion_op>0?'num-neg':''">{{ r.participacion_op > 0 ? fmt(r.participacion_op) : '—' }}</td>
+                    <td :class="(r.resultado_loteria-r.total_gastos-r.participacion_op)>=0?'num-pos':'num-neg'">
+                      {{ fmt(r.resultado_loteria - r.total_gastos - (r.participacion_op||0)) }}
                     </td>
                     <td :class="r.balance_pendiente_anterior>=0?'':'num-neg'">{{ fmt(r.balance_pendiente_anterior) }}</td>
                     <td :class="r.total_acumulado>=0?'':'num-neg'">{{ fmt(r.total_acumulado) }}</td>
@@ -1103,6 +1104,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                       <td><span class="tag tag-green" style="font-size:9px">✓</span></td>
                       <td :class="cb.resultado_periodo>=0?'num-pos':'num-neg'">{{ fmt(cb.resultado_periodo) }}</td>
                       <td class="num-neg">{{ fmt(cb.total_gastos||0) }}</td>
+                      <td style="color:var(--muted)">—</td>
                       <td :class="(cb.resultado_periodo-(cb.total_gastos||0))>=0?'num-pos':'num-neg'">{{ fmt(cb.resultado_periodo-(cb.total_gastos||0)) }}</td>
                       <td :class="cb.balance_pendiente_anterior<0?'num-neg':''">{{ fmt(cb.balance_pendiente_anterior||0) }}</td>
                       <td>{{ fmt(cb.total_acumulado||0) }}</td>
@@ -1123,7 +1125,8 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                     <td colspan="3"><strong>TOTALES</strong></td>
                     <td>{{ fmt(resumenData.reduce((s,r)=>s+r.resultado_loteria,0)) }}</td>
                     <td>{{ fmt(resumenData.reduce((s,r)=>s+r.total_gastos,0)) }}</td>
-                    <td>{{ fmt(resumenData.reduce((s,r)=>s+(r.resultado_loteria-r.total_gastos),0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+(r.participacion_op||0),0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+(r.resultado_loteria-r.total_gastos-(r.participacion_op||0)),0)) }}</td>
                     <td>{{ fmt(resumenData.reduce((s,r)=>s+r.balance_pendiente_anterior,0)) }}</td>
                     <td>{{ fmt(resumenData.reduce((s,r)=>s+r.total_acumulado,0)) }}</td>
                     <td>{{ fmt(resumenData.reduce((s,r)=>s+r.entregado_supervisor,0)) }}</td>
@@ -1242,6 +1245,82 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             </div>
           </div>
 
+          <!-- ══ GASTOS OPERATIVOS ══ -->
+          <div class="card" v-if="cuadreData.gastosOperativos && cuadreData.gastosOperativos.length"
+               style="border-color:rgba(76,201,240,0.25)">
+            <div class="card-header" style="background:rgba(76,201,240,0.04)">
+              <div>
+                <div class="card-title" style="color:var(--blue)">📋 Gastos Operativos del Período</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:2px">
+                  Solo gastos tipo <strong>Operativo</strong> — se descuentan del resultado del supervisor
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <span style="font-size:12px;font-weight:600;color:var(--red)">
+                  − {{ fmt(cuadreData.totals.gastos_op) }}
+                </span>
+                <button class="btn btn-ghost btn-xs" @click="abrirNuevoGasto(cuadreGrupoId, cuadrePeriodoId)">
+                  + Agregar
+                </button>
+              </div>
+            </div>
+            <div class="card-body" style="padding:0">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Concepto</th>
+                    <th>Categoría</th>
+                    <th>Banca</th>
+                    <th style="text-align:right">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="g in cuadreData.gastosOperativos" :key="g.id">
+                    <td style="color:var(--muted);font-size:11px">{{ g.fecha }}</td>
+                    <td>
+                      <span style="font-size:12px">{{ g.concepto }}</span>
+                    </td>
+                    <td>
+                      <span v-if="g.categorias" class="tag tag-blue" style="font-size:9px">{{ g.categorias?.nombre || '—' }}</span>
+                      <span v-else style="font-size:10px;color:var(--muted)">Sin categoría</span>
+                    </td>
+                    <td>
+                      <span v-if="g._bancaCodigo" class="tag tag-gray" style="font-size:9px">
+                        {{ g._bancaCodigo }} — {{ g._bancaNombre }}
+                      </span>
+                      <span v-else class="tag tag-yellow" style="font-size:9px" title="Gasto a nivel de grupo, no asignado a banca específica">
+                        🏢 Grupo general
+                      </span>
+                    </td>
+                    <td style="text-align:right">
+                      <strong class="num-neg">{{ fmt(g.monto) }}</strong>
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr class="summary-row">
+                    <td colspan="4"><strong>TOTAL GASTOS OPERATIVOS</strong></td>
+                    <td style="text-align:right">
+                      <strong class="num-neg">{{ fmt(cuadreData.totals.gastos_op) }}</strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <!-- Aviso si no hay gastos -->
+          <div v-else-if="cuadreData && (!cuadreData.gastosOperativos || !cuadreData.gastosOperativos.length)"
+               style="background:rgba(255,255,255,0.02);border:1px dashed var(--border2);border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:0">
+            <span style="font-size:11px;color:var(--muted)">
+              📋 Sin gastos operativos registrados para este período
+            </span>
+            <button class="btn btn-ghost btn-xs" @click="abrirNuevoGasto(cuadreGrupoId, cuadrePeriodoId)">
+              + Registrar gasto
+            </button>
+          </div>
+
           <!-- BALANCES -->
           <div class="card">
             <div class="card-header"><div class="card-title">💰 Balances y Movimientos</div></div>
@@ -1252,35 +1331,81 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                   <span class="kv-value num-pos">{{ fmt(cuadreData.totals.ventas) }}</span></div>
                 <div class="kv-row"><span class="kv-label">(-) Premios</span>
                   <span class="kv-value num-neg">{{ fmt(cuadreData.totals.premios) }}</span></div>
-                <div class="kv-row"><span class="kv-label">(-) Comisiones (sobre ventas)</span>
+                <div class="kv-row"><span class="kv-label">(-) Comisiones</span>
                   <span class="kv-value num-neg">{{ fmt(cuadreData.totals.comisiones) }}</span></div>
-                <div class="kv-row"><span class="kv-label">(-) Gastos Operativos</span>
-                  <span class="kv-value num-neg">{{ fmt(cuadreData.totals.total_gastos) }}</span></div>
-                <div class="kv-row kv-total"><span class="kv-label"><strong>Resultado Período</strong></span>
-                  <span :class="['kv-value', cuadreData.totals.resultado_periodo>=0?'num-pos':'num-neg']"><strong>{{ fmt(cuadreData.totals.resultado_periodo) }}</strong></span></div>
+                <!-- Subtotal antes de gastos — base de participación -->
+                <div class="kv-row kv-total" style="background:rgba(0,229,160,0.06);margin-bottom:8px">
+                  <span class="kv-label">
+                    <strong>Resultado Lotería</strong>
+                    <span style="display:block;font-size:9px;font-weight:normal;color:var(--muted)">Base para cálculo de participación</span>
+                  </span>
+                  <span :class="['kv-value', cuadreData.totals.resultado_loteria>=0?'num-pos':'num-neg']">
+                    <strong>{{ fmt(cuadreData.totals.resultado_loteria) }}</strong>
+                  </span>
+                </div>
+                <!-- Gastos operativos solo si existen -->
+                <div v-if="cuadreData.totals.total_gastos > 0">
+                  <div class="kv-row"><span class="kv-label" style="color:var(--blue)">(-) Gastos Operativos</span>
+                    <span class="kv-value num-neg">{{ fmt(cuadreData.totals.total_gastos) }}</span></div>
+                  <div class="kv-row kv-total"><span class="kv-label"><strong>Resultado Período</strong></span>
+                    <span :class="['kv-value', cuadreData.totals.resultado_periodo>=0?'num-pos':'num-neg']">
+                      <strong>{{ fmt(cuadreData.totals.resultado_periodo) }}</strong>
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <!-- Participación como gasto -->
-              <div class="cuadre-block" :style="cuadreData.totals.gasto_participacion>0 ? 'border-color:rgba(255,209,102,0.3)' : ''">
-                <div class="cuadre-block-title" style="color:var(--yellow)">Participación (Gasto Retenido por Supervisor)</div>
-                <div class="kv-row">
-                  <span class="kv-label">Resultado base participación</span>
-                  <span :class="['kv-value', cuadreData.totals.resultado_periodo>=0?'num-pos':'num-neg']">{{ fmt(cuadreData.totals.resultado_periodo) }}</span>
+              <!-- Participación — con arrastre, no muestra cálculo si base negativa -->
+              <div class="cuadre-block" :style="calcParticipacion>0 ? 'border-color:rgba(255,209,102,0.35)' : 'border-color:rgba(255,255,255,0.06)'">
+                <div class="cuadre-block-title" style="color:var(--yellow)">Participación del Supervisor</div>
+
+                <!-- Desglose de la base solo si hay arrastre -->
+                <div v-if="cuadreFrm.arrastre_participacion !== 0">
+                  <div class="kv-row">
+                    <span class="kv-label">Resultado Lotería esta semana</span>
+                    <span :class="['kv-value', cuadreData.totals.resultado_loteria>=0?'num-pos':'num-neg']">{{ fmt(cuadreData.totals.resultado_loteria) }}</span>
+                  </div>
+                  <div class="kv-row">
+                    <span class="kv-label">{{ cuadreFrm.arrastre_participacion < 0 ? '(+/−) Arrastre período anterior (déficit)' : '(+) Arrastre período anterior' }}</span>
+                    <span :class="['kv-value', cuadreFrm.arrastre_participacion>=0?'num-pos':'num-neg']">{{ fmt(cuadreFrm.arrastre_participacion) }}</span>
+                  </div>
                 </div>
-                <div class="kv-row">
-                  <span class="kv-label">% Participación acordado</span>
-                  <span class="kv-value" style="color:var(--yellow)">{{ cuadreData.grupo?.porcentaje_participacion || 0 }}%</span>
+                <div v-else class="kv-row">
+                  <span class="kv-label">Resultado Lotería (base participación)</span>
+                  <span :class="['kv-value', cuadreData.totals.resultado_loteria>=0?'num-pos':'num-neg']">{{ fmt(cuadreData.totals.resultado_loteria) }}</span>
                 </div>
-                <div v-if="cuadreData.totals.resultado_periodo > 0" class="kv-row kv-total" style="background:rgba(255,209,102,0.07)">
-                  <span class="kv-label"><strong>Gasto Participación (retiene supervisor)</strong></span>
-                  <span class="kv-value" style="color:var(--yellow)"><strong>{{ fmt(cuadreData.totals.gasto_participacion) }}</strong></span>
+
+                <!-- Base acumulada con arrastre -->
+                <div class="kv-row" style="margin-top:4px">
+                  <span class="kv-label"><strong>Base acumulada</strong></span>
+                  <span :class="['kv-value', calcBaseParticipacion>=0?'num-pos':'num-neg']"><strong>{{ fmt(calcBaseParticipacion) }}</strong></span>
                 </div>
-                <div v-else class="alert alert-info" style="margin-top:8px;margin-bottom:0;font-size:11px">
-                  ℹ️ Resultado negativo — sin participación esta semana (arrastre)
-                </div>
-                <div v-if="cuadreData.totals.gasto_participacion > 0" class="kv-row kv-total" style="margin-top:6px">
-                  <span class="kv-label"><strong>Resultado Neto para Central</strong></span>
-                  <span :class="['kv-value', cuadreData.totals.resultado_neto_central>=0?'num-pos':'num-neg']"><strong>{{ fmt(cuadreData.totals.resultado_neto_central) }}</strong></span>
+
+                <!-- SI BASE POSITIVA: mostrar cálculo y resultado -->
+                <template v-if="calcBaseParticipacion > 0">
+                  <div class="kv-row" style="margin-top:2px">
+                    <span class="kv-label">% Participación acordado</span>
+                    <span class="kv-value" style="color:var(--yellow)">{{ cuadreData.grupo?.porcentaje_participacion || 0 }}%</span>
+                  </div>
+                  <div class="kv-row kv-total" style="background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);margin-top:6px">
+                    <span class="kv-label">
+                      <strong>Participación a Pagar</strong>
+                      <span style="display:block;font-size:9px;font-weight:normal;color:var(--muted)">Supervisor retiene este monto</span>
+                    </span>
+                    <span class="kv-value" style="color:var(--yellow)"><strong>{{ fmt(calcParticipacion) }}</strong></span>
+                  </div>
+                  <div class="kv-row kv-total" style="margin-top:6px">
+                    <span class="kv-label"><strong>Resultado Neto para Central</strong></span>
+                    <span :class="['kv-value', (cuadreData.totals.resultado_periodo - calcParticipacion)>=0?'num-pos':'num-neg']">
+                      <strong>{{ fmt(cuadreData.totals.resultado_periodo - calcParticipacion) }}</strong>
+                    </span>
+                  </div>
+                </template>
+
+                <!-- SI BASE NEGATIVA/CERO: mensaje claro, sin cálculo -->
+                <div v-else class="alert" style="margin-top:8px;margin-bottom:0;font-size:11px;background:rgba(255,77,109,0.07);border:1px solid rgba(255,77,109,0.2);color:var(--red)">
+                  🔴 Base acumulada negativa — <strong>sin participación esta semana.</strong>
+                  El déficit de <strong>{{ fmt(calcBaseParticipacion) }}</strong> se arrastrará al próximo período.
                 </div>
               </div>
 
@@ -1569,8 +1694,8 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                   <th style="text-align:center">%</th>
                   <th style="text-align:right">Comisión</th>
                   <th style="text-align:right">Res. Lotería</th>
-                  <th style="text-align:right">Gastos</th>
-                  <th style="text-align:right">Res. Final</th>
+                  <th style="text-align:right">Gastos Op.</th>
+                  <th style="text-align:right">Res. Período</th>
                 </tr>
               </thead>
               <tbody>
@@ -1612,38 +1737,62 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                 <div class="report-kv"><span class="lbl">Ventas totales</span><span class="val pos">{{ fmt(cuadreData.totals.ventas) }}</span></div>
                 <div class="report-kv"><span class="lbl">(-) Premios pagados</span><span class="val neg">{{ fmt(cuadreData.totals.premios) }}</span></div>
                 <div class="report-kv"><span class="lbl">(-) Comisiones vendedores</span><span class="val neg">{{ fmt(cuadreData.totals.comisiones) }}</span></div>
-                <div class="report-kv"><span class="lbl">(-) Gastos operativos</span><span class="val neg">{{ fmt(cuadreData.totals.total_gastos) }}</span></div>
-                <div class="report-kv total-row">
-                  <span class="lbl"><strong>Resultado del Período</strong></span>
-                  <span :class="['val', cuadreData.totals.resultado_periodo>=0?'pos':'neg']"><strong>{{ fmt(cuadreData.totals.resultado_periodo) }}</strong></span>
+                <div class="report-kv total-row" style="background:#f0f7ff;border:1px solid #c8d8f0">
+                  <span class="lbl"><strong>Resultado Lotería</strong><span style="font-weight:normal;font-size:9px;display:block;color:#555">Base para cálculo de participación</span></span>
+                  <span :class="['val', cuadreData.totals.resultado_loteria>=0?'pos':'neg']"><strong>{{ fmt(cuadreData.totals.resultado_loteria) }}</strong></span>
+                </div>
+                <div v-if="cuadreData.totals.total_gastos > 0">
+                  <div class="report-kv" style="margin-top:4px"><span class="lbl">(-) Gastos operativos</span><span class="val neg">{{ fmt(cuadreData.totals.total_gastos) }}</span></div>
+                  <div class="report-kv total-row">
+                    <span class="lbl"><strong>Resultado del Período</strong></span>
+                    <span :class="['val', cuadreData.totals.resultado_periodo>=0?'pos':'neg']"><strong>{{ fmt(cuadreData.totals.resultado_periodo) }}</strong></span>
+                  </div>
                 </div>
               </div>
 
               <div class="report-section-title" style="margin-top:10px">Participación Supervisor</div>
               <div class="report-box">
-                <div class="report-kv"><span class="lbl">% Participación acordado</span><span class="val">{{ cuadreData.grupo?.porcentaje_participacion || 0 }}%</span></div>
-                <div v-if="calcParticipacion > 0">
-                  <div class="report-highlight">
-                    <div class="report-kv" style="border:none;padding:0"><span class="lbl">Gasto Participación (retiene)</span><span class="val">{{ fmt(calcParticipacion) }}</span></div>
+                <!-- Base siempre visible -->
+                <div v-if="cuadreFrm.arrastre_participacion !== 0">
+                  <div class="report-kv">
+                    <span class="lbl">Resultado Lotería esta semana</span>
+                    <span :class="['val', cuadreData.totals.resultado_loteria>=0?'pos':'neg']">{{ fmt(cuadreData.totals.resultado_loteria) }}</span>
                   </div>
-                  <div class="report-kv total-row"><span class="lbl"><strong>Neto para Central</strong></span><span :class="['val', (cuadreData.totals.resultado_periodo-calcParticipacion)>=0?'pos':'neg']"><strong>{{ fmt(cuadreData.totals.resultado_periodo - calcParticipacion) }}</strong></span></div>
+                  <div class="report-kv">
+                    <span class="lbl">{{ cuadreFrm.arrastre_participacion < 0 ? '(+/−) Arrastre anterior (déficit)' : '(+) Arrastre período anterior' }}</span>
+                    <span :class="['val', cuadreFrm.arrastre_participacion<0?'neg':'pos']">{{ fmt(cuadreFrm.arrastre_participacion) }}</span>
+                  </div>
                 </div>
-                <div v-else style="font-size:11px;color:#888;margin-top:6px">
-                  <div class="report-kv" style="border-bottom:1px solid #333">
-                    <span class="lbl">Arrastre anterior</span>
-                    <span :class="['val', cuadreFrm.arrastre_participacion<0?'neg':'']">{{ fmt(cuadreFrm.arrastre_participacion) }}</span>
+                <div v-else class="report-kv">
+                  <span class="lbl">Resultado Lotería (base participación)</span>
+                  <span :class="['val', cuadreData.totals.resultado_loteria>=0?'pos':'neg']">{{ fmt(cuadreData.totals.resultado_loteria) }}</span>
+                </div>
+                <div class="report-kv" style="border-bottom:1px solid #ccc">
+                  <span class="lbl"><strong>Base acumulada</strong></span>
+                  <span :class="['val', calcBaseParticipacion>=0?'pos':'neg']"><strong>{{ fmt(calcBaseParticipacion) }}</strong></span>
+                </div>
+                <div class="report-kv"><span class="lbl">% Participación acordado</span><span class="val">{{ cuadreData.grupo?.porcentaje_participacion || 0 }}%</span></div>
+
+                <!-- SI BASE POSITIVA: participación aplica -->
+                <template v-if="calcBaseParticipacion > 0">
+                  <div class="report-highlight" style="margin-top:6px">
+                    <div class="report-kv" style="border:none;padding:0">
+                      <span class="lbl">Participación a pagar (supervisor retiene)</span>
+                      <span class="val">{{ fmt(calcParticipacion) }}</span>
+                    </div>
                   </div>
-                  <div class="report-kv" style="border-bottom:1px solid #333">
-                    <span class="lbl">(+) Resultado semana</span>
-                    <span :class="['val', cuadreData.totals.resultado_periodo<0?'neg':'pos']">{{ fmt(cuadreData.totals.resultado_periodo) }}</span>
+                  <div class="report-kv total-row">
+                    <span class="lbl"><strong>Neto para Central</strong></span>
+                    <span :class="['val', (cuadreData.totals.resultado_periodo - calcParticipacion)>=0?'pos':'neg']">
+                      <strong>{{ fmt(cuadreData.totals.resultado_periodo - calcParticipacion) }}</strong>
+                    </span>
                   </div>
-                  <div class="report-kv" style="border-bottom:1px solid #333">
-                    <span class="lbl"><strong>Base acumulada</strong></span>
-                    <span :class="['val', calcBaseParticipacion<0?'neg':'']"><strong>{{ fmt(calcBaseParticipacion) }}</strong></span>
-                  </div>
-                  <div style="padding:6px 0;color:#888">
-                    ℹ️ Base negativa — sin participación esta semana. Se arrastra <strong>{{ fmt(calcBaseParticipacion) }}</strong> al próximo cuadre.
-                  </div>
+                </template>
+
+                <!-- SI BASE NEGATIVA: sin participación, claro y sin cálculo -->
+                <div v-else style="margin-top:8px;padding:6px 8px;background:#fff3f3;border:1px solid #f5c6cb;border-radius:4px;font-size:11px;color:#a00">
+                  🔴 Base acumulada negativa — <strong>sin participación esta semana.</strong><br>
+                  El déficit de <strong>{{ fmt(calcBaseParticipacion) }}</strong> se arrastra al próximo período.
                 </div>
               </div>
             </div>
@@ -1653,7 +1802,10 @@ select.form-control option { background: var(--surface2); color: var(--text); }
               <div class="report-section-title">Balance y Cierre</div>
               <div class="report-box">
                 <div class="report-kv"><span class="lbl">Balance Pendiente Período Anterior</span><span :class="['val', cuadreFrm.balance_anterior<0?'neg':'']">{{ fmt(cuadreFrm.balance_anterior) }}</span></div>
-                <div class="report-kv"><span class="lbl">Resultado Final</span><span :class="['val', cuadreData.totals.resultado_periodo>=0?'pos':'neg']">{{ fmt(cuadreData.totals.resultado_periodo) }}</span></div>
+                <div class="report-kv">
+                  <span class="lbl">Resultado Período<span style="font-weight:normal;font-size:9px;display:block;color:#888">después de gastos operativos</span></span>
+                  <span :class="['val', cuadreData.totals.resultado_periodo>=0?'pos':'neg']">{{ fmt(cuadreData.totals.resultado_periodo) }}</span>
+                </div>
                 <div class="report-kv total-row"><span class="lbl"><strong>Total Acumulado</strong></span><span :class="['val', (cuadreFrm.balance_anterior+cuadreData.totals.resultado_periodo)>=0?'pos':'neg']"><strong>{{ fmt(cuadreFrm.balance_anterior + cuadreData.totals.resultado_periodo) }}</strong></span></div>
               </div>
               <div class="report-box" style="margin-top:8px">
@@ -2104,10 +2256,16 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="section-title">Participación de Beneficios</div>
             <div class="section-sub">Seguimiento del arrastre de participación por grupo</div>
           </div>
-          <select class="form-control" style="width:200px" v-model="partFiltro.grupo_id" @change="loadParticipacion">
-            <option value="">Todos los grupos</option>
-            <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
-          </select>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-control" style="width:180px" v-model="partFiltro.periodo_id" @change="loadParticipacion">
+              <option value="">— Todos los períodos —</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+            </select>
+            <select class="form-control" style="width:180px" v-model="partFiltro.grupo_id" @change="loadParticipacion">
+              <option value="">— Todos los grupos —</option>
+              <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+            </select>
+          </div>
         </div>
 
         <div class="card">
@@ -2936,11 +3094,15 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="section-sub">Dinero real que entra y sale — seguimiento semanal y mensual del dueño</div>
           </div>
           <div style="display:flex;gap:10px;align-items:center">
-            <select class="form-control" style="width:140px" v-model="flujoFiltro.mes">
+            <select class="form-control" style="width:180px" v-model="flujoFiltro.periodo_id" @change="loadFlujo">
+              <option value="">— Todos los períodos —</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+            </select>
+            <select class="form-control" style="width:130px" v-model="flujoFiltro.mes">
               <option value="">— Todos los meses —</option>
               <option v-for="m in flujoMeses" :key="m.value" :value="m.value">{{ m.label }}</option>
             </select>
-            <select class="form-control" style="width:120px" v-model="flujoFiltro.tipo">
+            <select class="form-control" style="width:110px" v-model="flujoFiltro.tipo">
               <option value="">Todos</option>
               <option value="ingreso">📈 Ingresos</option>
               <option value="egreso">📉 Egresos</option>
@@ -3437,18 +3599,35 @@ select.form-control option { background: var(--surface2); color: var(--text); }
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Grupo</label>
-              <select class="form-control" v-model="gastoFrm.grupo_id">
+              <select class="form-control" v-model="gastoFrm.grupo_id" @change="gastoFrm.banca_id=''">
                 <option value="">— Grupo (opcional) —</option>
                 <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Banca</label>
-              <select class="form-control" v-model="gastoFrm.banca_id">
-                <option value="">— Banca (opcional) —</option>
-                <option v-for="b in bancas" :key="b.id" :value="b.id">{{ b.codigo }} - {{ b.nombre }}</option>
+              <label class="form-label">
+                Banca
+                <span v-if="gastoFrm.tipo==='operativo'" style="color:var(--blue);font-size:9px;margin-left:4px">
+                  ★ asigna al cuadre
+                </span>
+              </label>
+              <select class="form-control"
+                :style="gastoFrm.tipo==='operativo' && !gastoFrm.banca_id ? 'border-color:rgba(76,201,240,0.6)' : ''"
+                v-model="gastoFrm.banca_id">
+                <option value="">{{ gastoFrm.tipo==='operativo' ? '— Sin banca (va a total del grupo) —' : '— Banca (opcional) —' }}</option>
+                <option v-for="b in (gastoFrm.grupo_id ? bancas.filter(b=>b.grupo_id===gastoFrm.grupo_id) : bancas)"
+                        :key="b.id" :value="b.id">{{ b.codigo }} — {{ b.nombre }}</option>
               </select>
             </div>
+          </div>
+          <!-- Tip contextual según tipo -->
+          <div v-if="gastoFrm.tipo==='operativo'" class="alert alert-info" style="font-size:11px;padding:8px 12px">
+            💡 <strong>Operativo</strong> — Este gasto <strong>aparecerá en el cuadre</strong> del supervisor y se descontará del resultado.
+            <span v-if="!gastoFrm.banca_id"> Sin banca: se descuenta del total del grupo.</span>
+            <span v-else> Se asignará a la banca seleccionada.</span>
+          </div>
+          <div v-else-if="gastoFrm.tipo==='central'" class="alert" style="font-size:11px;padding:8px 12px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);color:var(--yellow)">
+            🏢 <strong>Central</strong> — Gasto de administración central. <strong>No aparece en cuadres de supervisores.</strong>
           </div>
           <div class="form-row">
           <div class="form-row">
@@ -4288,14 +4467,27 @@ createApp({
         .select('*, grupos(nombre), periodos(descripcion, fecha_inicio, fecha_fin)')
         .eq('periodo_id', selectedPeriodoId.value);
 
-      // Cargar gastos del período (para mostrar total_gastos real en resumen)
+      // Cargar gastos operativos del período por grupo
       const { data: gastosResumen } = await sb.from('gastos')
-        .select('grupo_id, monto')
+        .select('grupo_id, monto, tipo')
         .eq('periodo_id', selectedPeriodoId.value);
-      // Suma de gastos por grupo
+      // Suma de gastos operativos y de participación por grupo
       const gastosPorGrupo = {};
+      const partGastoPorGrupo = {};
       for (const g of (gastosResumen || [])) {
-        gastosPorGrupo[g.grupo_id] = (gastosPorGrupo[g.grupo_id] || 0) + (g.monto || 0);
+        if (g.tipo === 'participacion') {
+          partGastoPorGrupo[g.grupo_id] = (partGastoPorGrupo[g.grupo_id] || 0) + (g.monto || 0);
+        } else if (g.tipo === 'operativo') {
+          gastosPorGrupo[g.grupo_id] = (gastosPorGrupo[g.grupo_id] || 0) + (g.monto || 0);
+        }
+      }
+      // Cargar participación desde participacion_acumulada (dato oficial al guardar cuadre)
+      const { data: partAcumData } = await sb.from('participacion_acumulada')
+        .select('grupo_id, monto_a_pagar')
+        .eq('periodo_id', selectedPeriodoId.value);
+      const partAcumPorGrupo = {};
+      for (const p of (partAcumData || [])) {
+        partAcumPorGrupo[p.grupo_id] = (p.monto_a_pagar || 0);
       }
 
       // Construir mapa: primero con datos vivos de ventas
@@ -4310,7 +4502,7 @@ createApp({
           grupos: { nombre: g?.nombre || 'Sin Grupo' },
           periodos: periodoObj,
           total_ventas: 0, total_premios: 0, total_comisiones: 0,
-          total_gastos: 0, resultado_loteria: 0,
+          total_gastos: 0, participacion_op: 0, resultado_loteria: 0,
           // campos de cuadre (vacíos hasta que se guarde)
           balance_pendiente_anterior: 0, total_acumulado: 0,
           entregado_supervisor: 0, entregado_central: 0,
@@ -4328,11 +4520,13 @@ createApp({
         groupMap[gid].resultado_loteria += resNeto;
       }
 
-      // Aplicar gastos reales a grupos que no tienen cuadre guardado aún
+      // Aplicar gastos y participación a todos los grupos
       for (const gid of Object.keys(groupMap)) {
         if (!groupMap[gid].cuadre_guardado) {
-          groupMap[gid].total_gastos = gastosPorGrupo[gid] || 0;
+          groupMap[gid].total_gastos   = gastosPorGrupo[gid]    || 0;
         }
+        // Participación: preferir dato oficial de participacion_acumulada, si no usar gasto tipo=participacion
+        groupMap[gid].participacion_op = partAcumPorGrupo[gid] || partGastoPorGrupo[gid] || 0;
       }
 
       // Sobreescribir con cuadres guardados donde existan (datos más completos)
@@ -4438,7 +4632,9 @@ createApp({
     const calcBalanceFinal = computed(() => calcMontoEntregaSupervisor.value - cuadreFrm.value.depositado);
     const calcBaseParticipacion = computed(() => {
       if (!cuadreData.value) return 0;
-      return cuadreFrm.value.arrastre_participacion + cuadreData.value.totals.resultado_periodo;
+      // Base = Ventas - Premios - Comisión (resultado_loteria) + arrastre
+      // Los gastos operativos NO se descuentan para calcular la participación
+      return cuadreFrm.value.arrastre_participacion + cuadreData.value.totals.resultado_loteria;
     });
     const calcParticipacion = computed(() => {
       if (!cuadreData.value) return 0;
@@ -4468,9 +4664,9 @@ createApp({
         .eq('periodo_id', cuadrePeriodoId.value)
         .in('banca_id', bancasGrupo.map(b=>b.id));
 
-      // Cargar gastos del grupo en este período (excluir participacion)
+      // Cargar gastos del grupo en este período (con categoría para mostrar en panel)
       const { data: gastosGrupo } = await sb.from('gastos')
-        .select('*')
+        .select('*, categorias(nombre,color)')
         .eq('periodo_id', cuadrePeriodoId.value)
         .eq('grupo_id', cuadreGrupoId.value);
 
@@ -4529,6 +4725,12 @@ createApp({
       const movEntradas = (movSemana||[]).filter(p=>p.tipo==='entrada').reduce((s,p)=>s+p.monto,0);
       const movNeto = movSalidas - movEntradas;
 
+      // ── GASTOS OPERATIVOS (solo tipo='operativo' rebaja en cuadre del supervisor) ──
+      const gastosOp    = (gastosGrupo||[]).filter(g => g.tipo==='operativo');
+      // Gastos sin banca asignada → van al total del grupo (no a una banca específica)
+      const gastosGrupoSinBanca = gastosOp.filter(g => !g.banca_id);
+      const totalGastosGrupo    = gastosGrupoSinBanca.reduce((s,g)=>s+g.monto,0);
+
       // ── CALCULAR POR BANCA ──
       const bancasCalc = bancasGrupo.map(b => {
         const v = ventas?.find(v=>v.banca_id===b.id) || {};
@@ -4537,13 +4739,14 @@ createApp({
         const result = vtas - prem;
         const com = vtas * (b.porcentaje_comision || 0) / 100;
         const resNeto = result - com;
-        const gastosOp = (gastosGrupo||[]).filter(g=>g.banca_id===b.id && g.tipo!=='participacion').reduce((s,g)=>s+g.monto,0);
+        // Solo gastos operativos de esta banca específica
+        const gastosOpBanca = gastosOp.filter(g=>g.banca_id===b.id).reduce((s,g)=>s+g.monto,0);
         return {
           ...b,
           ventas: vtas, premios: prem,
           resultado: result, comision: com, resultado_neto: resNeto,
-          gastos_op: gastosOp, total_gastos: gastosOp,
-          resultado_periodo: resNeto - gastosOp
+          gastos_op: gastosOpBanca, total_gastos: gastosOpBanca,
+          resultado_periodo: resNeto - gastosOpBanca
         };
       });
 
@@ -4557,6 +4760,10 @@ createApp({
         total_gastos: acc.total_gastos + b.total_gastos,
         resultado_periodo: acc.resultado_periodo + b.resultado_periodo,
       }), { ventas:0, premios:0, resultado:0, comisiones:0, resultado_loteria:0, gastos_op:0, total_gastos:0, resultado_periodo:0 });
+      // Agregar gastos de grupo sin banca al total
+      totals.gastos_op         += totalGastosGrupo;
+      totals.total_gastos      += totalGastosGrupo;
+      totals.resultado_periodo -= totalGastosGrupo;
 
       const pctPart = grupo?.porcentaje_participacion || 0;
       totals.gasto_participacion = totals.resultado_periodo > 0 ? Math.round(totals.resultado_periodo * pctPart / 100) : 0;
@@ -4566,7 +4773,13 @@ createApp({
         grupo, periodo, bancas: bancasCalc, totals,
         movimientos: movSemana || [],
         movSalidas, movEntradas, movNeto,
-        editando: !!cuadreExistente
+        editando: !!cuadreExistente,
+        // Gastos operativos visibles en el cuadre
+        gastosOperativos: gastosOp.map(g=>({
+          ...g,
+          _bancaNombre: bancasGrupo.find(b=>b.id===g.banca_id)?.nombre || null,
+          _bancaCodigo: bancasGrupo.find(b=>b.id===g.banca_id)?.codigo || null
+        }))
       };
 
       // ── POBLAR FORMULARIO ──
@@ -4670,14 +4883,22 @@ createApp({
       const com    = vtas * pctCom / 100;
       const resNeto = result - com;
 
+      // ── GASTOS OPERATIVOS de esta banca en este período ──
+      const { data: gastosBanca } = await sb.from('gastos')
+        .select('*, categorias(nombre,color)')
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('tipo', 'operativo');
+      const totalGastosBanca = (gastosBanca||[]).reduce((s,g)=>s+g.monto,0);
+
       const totals = {
         ventas: vtas, premios: prem,
         resultado: result, comisiones: com,
         resultado_loteria: resNeto,
-        gastos_op: 0, total_gastos: 0,
-        resultado_periodo: resNeto,
+        gastos_op: totalGastosBanca, total_gastos: totalGastosBanca,
+        resultado_periodo: resNeto - totalGastosBanca,
         gasto_participacion: 0,
-        resultado_neto_central: resNeto
+        resultado_neto_central: resNeto - totalGastosBanca
       };
 
       // ── MOVIMIENTOS DE SEMANA de esta banca específica ──
@@ -4693,14 +4914,20 @@ createApp({
 
       cuadreData.value = {
         grupo, periodo,
-        banca,                        // la banca específica
+        banca,
         esBancaIndividual: true,
         bancas: banca ? [{ ...banca, ventas: vtas, premios: prem, resultado: result,
-          comision: com, resultado_neto: resNeto, gastos_op: 0, total_gastos: 0,
-          resultado_periodo: resNeto }] : [],
+          comision: com, resultado_neto: resNeto,
+          gastos_op: totalGastosBanca, total_gastos: totalGastosBanca,
+          resultado_periodo: resNeto - totalGastosBanca }] : [],
         totals,
         movimientos: movSemana || [], movSalidas, movEntradas, movNeto,
-        editando: !!cuadreExistente
+        editando: !!cuadreExistente,
+        gastosOperativos: (gastosBanca||[]).map(g=>({
+          ...g,
+          _bancaNombre: banca?.nombre || null,
+          _bancaCodigo: banca?.codigo || null
+        }))
       };
 
       if (cuadreExistente) {
@@ -4824,7 +5051,7 @@ createApp({
           categoria_id: catPart1?.id || null,
           concepto:     `Participación ${pctPart}% — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
           monto:        partCalc,
-          fecha:        new Date().toISOString().split('T')[0]
+          fecha:        cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0]
         });
       }
 
@@ -4839,7 +5066,7 @@ createApp({
         // Banca entrega dinero → ingreso en flujo
         const catIngreso = categorias.value.find(c=>c.nombre?.includes('Depósito Supervisor') || (c.tipo==='ingreso' && c.nombre?.toLowerCase().includes('cuadre')));
         await sb.from('flujo_efectivo').insert({
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
           tipo: 'ingreso',
           concepto: `Depósito cuadre — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
           monto: f.depositado,
@@ -4860,7 +5087,7 @@ createApp({
           if (newCat) { categorias.value.push(newCat); catPerdida = newCat; }
         }
         await sb.from('flujo_efectivo').insert({
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
           tipo: 'egreso',
           concepto: `Pago Cuadre Perdida — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
           monto: Math.abs(f.depositado),
@@ -4928,7 +5155,7 @@ createApp({
           categoria_id: catPart2?.id || null,
           concepto:     `Participación ${cuadreData.value.grupo?.porcentaje_participacion || 0}% — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
           monto:        calcParticipacion.value,
-          fecha:        new Date().toISOString().split('T')[0]
+          fecha:        cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0]
         });
       }
 
@@ -4965,7 +5192,7 @@ createApp({
       if (f.depositado > 0) {
         const catIngreso = categorias.value.find(c=>c.nombre?.includes('Depósito Supervisor') || (c.tipo==='ingreso' && c.nombre?.toLowerCase().includes('cuadre')));
         await sb.from('flujo_efectivo').insert({
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
           tipo: 'ingreso',
           concepto: `Depósito cuadre — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
           monto: f.depositado,
@@ -5059,6 +5286,10 @@ createApp({
       gastoEditId.value = null;
       gastoFrm.value = { periodo_id:'', grupo_id:'', banca_id:'', tipo:'operativo', concepto:'', monto:0, fecha: new Date().toISOString().split('T')[0], categoria_id:'' };
       loadGastos();
+      // Si hay un cuadre abierto en pantalla, recargarlo para reflejar el gasto
+      if (cuadreData.value) {
+        await loadCuadre();
+      }
     }
     async function deleteGasto(id) {
       if (!await confirmDialog('¿Eliminar gasto?', 'Esta acción no se puede deshacer.')) return;
@@ -5141,7 +5372,7 @@ createApp({
     // ══════════════════════════════════════════
     const participacion = ref([]);
     const loadingPart = ref(false);
-    const partFiltro = ref({ grupo_id: '' });
+    const partFiltro = ref({ grupo_id: '', periodo_id: '' });
 
     async function loadParticipacion() {
       if (!sb) return;
@@ -5149,7 +5380,8 @@ createApp({
       let q = sb.from('participacion_acumulada')
         .select('*, grupos(nombre), periodos(descripcion, fecha_inicio), bancas(codigo, nombre)')
         .order('created_at', { ascending: false });
-      if (partFiltro.value.grupo_id) q = q.eq('grupo_id', partFiltro.value.grupo_id);
+      if (partFiltro.value.grupo_id)  q = q.eq('grupo_id',  partFiltro.value.grupo_id);
+      if (partFiltro.value.periodo_id) q = q.eq('periodo_id', partFiltro.value.periodo_id);
       const { data } = await q;
       participacion.value = data || [];
       loadingPart.value = false;
@@ -5661,7 +5893,7 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
     const flujoMovs = ref([]);
     const loadingFlujo = ref(false);
     const showFlujoModal = ref(false);
-    const flujoFiltro = ref({ mes: '', tipo: '' });
+    const flujoFiltro = ref({ mes: '', tipo: '', periodo_id: '' });
     const flujoFrm = ref({
       fecha: new Date().toISOString().split('T')[0],
       tipo: 'ingreso', concepto: '', monto: 0,
@@ -5692,8 +5924,9 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
 
     const flujoMovsFiltrados = computed(() => {
       return flujoMovs.value.filter(m => {
-        if (flujoFiltro.value.tipo && m.tipo !== flujoFiltro.value.tipo) return false;
-        if (flujoFiltro.value.mes && !m.fecha?.startsWith(flujoFiltro.value.mes)) return false;
+        if (flujoFiltro.value.tipo     && m.tipo !== flujoFiltro.value.tipo)            return false;
+        if (flujoFiltro.value.mes      && !m.fecha?.startsWith(flujoFiltro.value.mes))   return false;
+        if (flujoFiltro.value.periodo_id && m.periodo_id !== flujoFiltro.value.periodo_id) return false;
         return true;
       });
     });
