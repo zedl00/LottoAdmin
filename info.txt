@@ -1,0 +1,9 @@
+- Colocar autenticacion y roles
+- Habilitar Git desde vs code
+- pantalla cambiante oscura y clara
+- Refactoring | Estructura modular VueJS
+- Realizar el sweetAlert mas pequeno con menos tiempo en pantalla y en la parte inferior izq
+- En la impresion del cuadre que aparezca el cuadre de una bnaca cuando sea modo individual.
+- Color gris de ventas y nombre de banca mas oscuro que casi no se ventas
+- De alguna forma ver el cuadre del grupo capital como grupo con todas sus bancas aun sea modo individual
+- En participacion no esta haciendo bien la presentacion de la informacion cuando es un grupo modo individual, 

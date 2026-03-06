@@ -10,25 +10,30 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <style>
 :root {
-  --bg:       #0a0d12;
-  --surface:  #111620;
-  --surface2: #161d2b;
-  --border:   #1e2a3a;
-  --border2:  #253347;
-  --accent:   #00e5a0;
-  --accent2:  #00b87a;
-  --red:      #ff4d6d;
-  --yellow:   #ffd166;
-  --blue:     #4cc9f0;
-  --text:     #e8edf5;
-  --muted:    #5a6a80;
+  --bg:        #0a0d12;
+  --surface:   #111620;
+  --surface2:  #161d2b;
+  --border:    #1e2a3a;
+  --border2:   #253347;
+  --accent:    #00e5a0;
+  --accent2:   #00b87a;
+  --red:       #ff4d6d;
+  --yellow:    #ffd166;
+  --blue:      #4cc9f0;
+  --text:      #e8edf5;
+  --muted:     #5a6a80;
   --card-glow: 0 0 30px rgba(0,229,160,0.04);
   --font-h: 'Syne', sans-serif;
   --font-n: 'DM Mono', monospace;
+  /* Input fields — amarillo identificador, siempre igual */
+  --input-bg:   #FDFFEF;
+  --input-text: #0f1f3d;
+  --input-border: #d4d8b0;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
@@ -45,6 +50,10 @@ body::before {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,229,160,0.07) 0%, transparent 60%);
   pointer-events: none; z-index: 0;
+  transition: background 0.3s ease;
+}
+[data-theme="light"] body::before {
+  background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(26,86,219,0.05) 0%, transparent 60%);
 }
 
 /* ── LAYOUT ── */
@@ -94,9 +103,13 @@ body::before {
 }
 .nav-item:hover { background: var(--surface2); color: var(--text); }
 .nav-item.active {
-  background: rgba(0,229,160,0.1);
-  border-color: rgba(0,229,160,0.2);
+  background: rgba(var(--accent-rgb,0,229,160),0.1);
+  border-color: rgba(var(--accent-rgb,0,229,160),0.25);
   color: var(--accent);
+}
+[data-theme="light"] .nav-item.active {
+  background: rgba(26,86,219,0.1);
+  border-color: rgba(26,86,219,0.25);
 }
 .nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
 .nav-item .badge {
@@ -125,6 +138,7 @@ body::before {
   padding: 0 28px;
   position: sticky; top: 0; z-index: 50;
 }
+[data-theme="light"] .topbar { background: #ffffff; box-shadow: 0 1px 0 var(--border), 0 2px 8px rgba(26,86,219,0.06); }
 .topbar-left { display: flex; align-items: center; gap: 12px; }
 .topbar-title {
   font-family: var(--font-h); font-size: 17px; font-weight: 700; color: var(--text);
@@ -134,6 +148,10 @@ body::before {
   background: rgba(0,229,160,0.1);
   border: 1px solid rgba(0,229,160,0.2);
   padding: 4px 10px; border-radius: 20px;
+}
+[data-theme="light"] .topbar-period {
+  background: rgba(26,86,219,0.1);
+  border-color: rgba(26,86,219,0.25);
 }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .btn {
@@ -234,6 +252,7 @@ thead tr {
   background: rgba(255,255,255,0.03);
   border-bottom: 1px solid var(--border);
 }
+[data-theme="light"] thead tr { background: #f0f4fb; }
 th {
   text-align: left;
   padding: 10px 14px;
@@ -249,6 +268,7 @@ td {
 }
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: rgba(255,255,255,0.02); }
+[data-theme="light"] tr:hover td { background: rgba(26,86,219,0.04); }
 .num-pos { color: var(--accent); font-weight: 500; }
 .num-neg { color: var(--red); font-weight: 500; }
 .num-neu { color: var(--yellow); font-weight: 500; }
@@ -261,6 +281,12 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 .tag-red   { background: rgba(255,77,109,0.12); color: var(--red);    border: 1px solid rgba(255,77,109,0.25); }
 .tag-blue  { background: rgba(76,201,240,0.12); color: var(--blue);   border: 1px solid rgba(76,201,240,0.25); }
 .tag-gray  { background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+.tag-yellow{ background: rgba(255,209,102,0.15); color: #a07000;      border: 1px solid rgba(255,209,102,0.4); }
+[data-theme="light"] .tag-green { background: rgba(26,86,219,0.1);  color: #1342b8; border-color: rgba(26,86,219,0.3); }
+[data-theme="light"] .tag-blue  { background: rgba(37,99,235,0.1);  color: #1d4ed8; border-color: rgba(37,99,235,0.3); }
+[data-theme="light"] .tag-gray  { background: rgba(0,0,0,0.04);     color: var(--muted); border-color: var(--border); }
+[data-theme="light"] .num-pos   { color: #1342b8; }
+[data-theme="light"] .num-neg   { color: #c0152d; }
 
 /* ── FORMS ── */
 .form-grid { display: grid; gap: 14px; }
@@ -271,19 +297,20 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   color: var(--muted); font-weight: 500;
 }
 .form-control {
-  background: var(--surface2);
-  border: 1px solid var(--border2);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
   border-radius: 8px;
   padding: 9px 12px;
-  color: var(--text);
+  color: var(--input-text);
   font-family: var(--font-n); font-size: 12px;
-  outline: none; transition: border-color .15s;
+  font-weight: 500;
+  outline: none; transition: border-color .15s, box-shadow .15s;
   width: 100%;
 }
-.form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,229,160,0.1); }
-.form-control::placeholder { color: var(--muted); }
+.form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 0,229,160),0.15); }
+.form-control::placeholder { color: #9aab7a; opacity: 0.7; }
 select.form-control { cursor: pointer; }
-select.form-control option { background: var(--surface2); }
+select.form-control option { background: var(--surface2); color: var(--text); }
 
 /* ── MODAL ── */
 .overlay {
@@ -339,6 +366,10 @@ select.form-control option { background: var(--surface2); }
   border-top: 1px solid rgba(0,229,160,0.15);
 }
 .summary-row td { color: var(--accent); font-weight: 500; }
+[data-theme="light"] .summary-row {
+  background: rgba(26,86,219,0.05);
+  border-top-color: rgba(26,86,219,0.2);
+}
 
 /* ── ALERT ── */
 .alert {
@@ -349,6 +380,8 @@ select.form-control option { background: var(--surface2); }
 .alert-success { background: rgba(0,229,160,0.1); border: 1px solid rgba(0,229,160,0.2); color: var(--accent); }
 .alert-error   { background: rgba(255,77,109,0.1); border: 1px solid rgba(255,77,109,0.2); color: var(--red); }
 .alert-info    { background: rgba(76,201,240,0.1);  border: 1px solid rgba(76,201,240,0.2);  color: var(--blue); }
+[data-theme="light"] .alert-success { background: rgba(26,86,219,0.07); border-color: rgba(26,86,219,0.25); }
+[data-theme="light"] .alert-info    { background: rgba(37,99,235,0.07); border-color: rgba(37,99,235,0.25); }
 
 /* ── TABS ── */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
@@ -359,6 +392,8 @@ select.form-control option { background: var(--surface2); }
 }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+[data-theme="light"] .tab { color: var(--muted); }
+[data-theme="light"] .tab:hover { color: var(--text); }
 
 /* ── GRID LAYOUT ── */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -385,6 +420,7 @@ select.form-control option { background: var(--surface2); }
   border-bottom: 1px solid rgba(255,255,255,0.03);
   font-size: 12px;
 }
+[data-theme="light"] .kv-row { border-bottom-color: var(--border); }
 .kv-row:last-child { border-bottom: none; }
 .kv-label { color: var(--muted); }
 .kv-value { font-weight: 500; }
@@ -393,6 +429,7 @@ select.form-control option { background: var(--surface2); }
   padding: 8px 10px; border-radius: 6px;
   margin-top: 8px;
 }
+[data-theme="light"] .kv-total { background: rgba(26,86,219,0.07); }
 
 /* ── LOADING ── */
 .loading {
@@ -487,6 +524,9 @@ select.form-control option { background: var(--surface2); }
   font-size: 12px; color: var(--yellow);
   display: flex; align-items: center; gap: 8px;
 }
+/* ── SWEETALERT CUSTOM ── */
+.swal-title-sm { font-size: 12px !important; font-weight: 500 !important; }
+
 /* ── PRINT REPORT ── */
 .report-modal { max-width: 780px !important; }
 .report-body { padding: 0 !important; }
@@ -633,16 +673,20 @@ select.form-control option { background: var(--surface2); }
         <div class="section-header">
           <div>
             <div class="section-title">Dashboard</div>
-            <div class="section-sub">Resumen general del período activo</div>
+            <div class="section-sub">Indicadores generales — período activo</div>
           </div>
-          <select class="form-control" style="width:200px" v-model="selectedPeriodoId" @change="loadDashboard">
-            <option v-for="p in periodos" :key="p.id" :value="p.id">
-              {{ p.descripcion || p.fecha_inicio }}
-            </option>
-          </select>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-control" style="width:200px" v-model="selectedPeriodoId" @change="loadDashboard">
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" @click="toggleTheme" :title="'Modo: '+themeMode" style="font-size:16px;padding:6px 10px">
+              {{ themeMode==='dark' ? '🌙' : themeMode==='light' ? '☀️' : '🌓' }}
+            </button>
+          </div>
         </div>
 
-        <div class="metrics-grid">
+        <!-- ── ROW 1: KPIs principales ── -->
+        <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr)">
           <div class="metric-card blue">
             <div class="metric-icon">🎰</div>
             <div class="metric-label">Total Ventas</div>
@@ -653,74 +697,140 @@ select.form-control option { background: var(--surface2); }
             <div class="metric-icon">🏆</div>
             <div class="metric-label">Total Premios</div>
             <div class="metric-value neg">{{ fmt(dashStats.premios) }}</div>
-            <div class="metric-sub">{{ pct(dashStats.premios, dashStats.ventas) }} de las ventas</div>
+            <div class="metric-sub">{{ pct(dashStats.premios, dashStats.ventas) }} de ventas</div>
           </div>
           <div class="metric-card yellow">
             <div class="metric-icon">💼</div>
-            <div class="metric-label">Total Comisiones</div>
+            <div class="metric-label">Comisiones</div>
             <div class="metric-value" style="color:var(--yellow)">{{ fmt(dashStats.comisiones) }}</div>
+            <div class="metric-sub">{{ pct(dashStats.comisiones, dashStats.ventas) }} de ventas</div>
           </div>
           <div :class="['metric-card', dashStats.resultado >= 0 ? 'green' : 'red']">
             <div class="metric-icon">📊</div>
             <div class="metric-label">Resultado Neto</div>
-            <div :class="['metric-value', dashStats.resultado >= 0 ? 'pos' : 'neg']">
-              {{ fmt(dashStats.resultado) }}
-            </div>
-            <div class="metric-sub">Después de premios y comisiones</div>
+            <div :class="['metric-value', dashStats.resultado >= 0 ? 'pos' : 'neg']">{{ fmt(dashStats.resultado) }}</div>
+            <div class="metric-sub">Ventas − Premios − Comisiones</div>
           </div>
         </div>
 
+        <div class="section-gap" style="height:12px"></div>
+
+        <!-- ── ROW 2: KPIs secundarios ── -->
+        <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="metric-card" style="border-color:rgba(255,77,109,0.3)">
+            <div class="metric-icon">📋</div>
+            <div class="metric-label">Gastos del Período</div>
+            <div class="metric-value neg">{{ fmt(dashKpis.gastos) }}</div>
+            <div class="metric-sub">Operativos + Participación</div>
+          </div>
+          <div :class="['metric-card', dashKpis.flujoNeto >= 0 ? 'green' : 'red']">
+            <div class="metric-icon">💵</div>
+            <div class="metric-label">Flujo Neto (total)</div>
+            <div :class="['metric-value', dashKpis.flujoNeto >= 0 ? 'pos' : 'neg']">{{ fmt(dashKpis.flujoNeto) }}</div>
+            <div class="metric-sub">Ing {{ fmt(dashKpis.flujoIngresos) }} / Egr {{ fmt(dashKpis.flujoEgresos) }}</div>
+          </div>
+          <div class="metric-card blue">
+            <div class="metric-icon">🏦</div>
+            <div class="metric-label">Saldo Banco</div>
+            <div :class="['metric-value', dashKpis.saldoBanco >= 0 ? 'pos' : 'neg']">{{ fmt(dashKpis.saldoBanco) }}</div>
+            <div class="metric-sub">Cuenta bancaria acumulado</div>
+          </div>
+          <div class="metric-card yellow">
+            <div class="metric-icon">📈</div>
+            <div class="metric-label">Participación</div>
+            <div class="metric-value" style="color:var(--yellow)">{{ fmt(dashKpis.participacionTotal) }}</div>
+            <div class="metric-sub">Pagado: {{ fmt(dashKpis.participacionPagada) }}</div>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 3: Tabla grupos + Donut ── -->
         <div class="grid-2">
-          <!-- Rendimiento por Grupo -->
           <div class="card">
             <div class="card-header">
               <div class="card-title">Resultado por Grupo</div>
+              <div style="font-size:10px;color:var(--muted)">▼ = detalle de bancas</div>
             </div>
             <div class="card-body" style="padding:0">
               <div class="loading" v-if="loadingDash"><div class="spinner"></div></div>
               <div class="empty" v-else-if="!grupoCuadres.length">
-                <div class="empty-icon">📋</div>
-                <p>Sin datos para este período</p>
+                <div class="empty-icon">📋</div><p>Sin datos para este período</p>
               </div>
               <table v-else>
                 <thead><tr>
-                  <th>Grupo</th><th>Ventas</th><th>Premios</th><th>Resultado</th><th>Estado</th>
+                  <th>Grupo</th><th style="text-align:right">Ventas</th>
+                  <th style="text-align:right">Premios</th><th style="text-align:right">Resultado</th><th>Estado</th>
                 </tr></thead>
                 <tbody>
-                  <tr v-for="g in grupoCuadres" :key="g.id">
-                    <td><strong>{{ g.grupos?.nombre }}</strong></td>
-                    <td class="num-pos">{{ fmt(g.total_ventas) }}</td>
-                    <td class="num-neg">{{ fmt(g.total_premios) }}</td>
-                    <td :class="g.resultado_loteria >= 0 ? 'num-pos' : 'num-neg'">
-                      {{ fmt(g.resultado_loteria) }}
-                    </td>
-                    <td>
-                      <span :class="g.resultado_loteria >= 0 ? 'tag tag-green' : 'tag tag-red'">
-                        {{ g.resultado_loteria >= 0 ? 'Ganancia' : 'Pérdida' }}
-                      </span>
-                    </td>
-                  </tr>
+                  <template v-for="g in grupoCuadres" :key="g.id">
+                    <tr>
+                      <td>
+                        <strong>{{ g.grupos?.nombre }}</strong>
+                        <span v-if="g.modo==='individual_bancas'" class="tag tag-yellow" style="font-size:9px;margin-left:4px">🏦</span>
+                        <button v-if="g.modo==='individual_bancas' && (dashGruposBancas[g.id]||[]).length"
+                          class="btn btn-ghost btn-xs" style="padding:1px 5px;margin-left:4px;font-size:10px"
+                          @click="dashExpandido[g.id]=!dashExpandido[g.id]">
+                          {{ dashExpandido[g.id] ? '▲' : '▼' }}
+                        </button>
+                      </td>
+                      <td style="text-align:right" class="num-pos">{{ fmt(g.total_ventas) }}</td>
+                      <td style="text-align:right" class="num-neg">{{ fmt(g.total_premios) }}</td>
+                      <td style="text-align:right" :class="g.resultado_loteria >= 0 ? 'num-pos' : 'num-neg'">{{ fmt(g.resultado_loteria) }}</td>
+                      <td><span :class="g.resultado_loteria >= 0 ? 'tag tag-green' : 'tag tag-red'">{{ g.resultado_loteria >= 0 ? 'Ganancia' : 'Pérdida' }}</span></td>
+                    </tr>
+                    <template v-if="g.modo==='individual_bancas' && dashExpandido[g.id]">
+                      <tr v-for="b in (dashGruposBancas[g.id]||[])" :key="b.banca_id"
+                          style="background:rgba(255,209,102,0.06);font-size:12px">
+                        <td style="padding-left:26px;color:var(--muted)">
+                          ↳ <span class="tag tag-yellow" style="font-size:9px">{{ b.codigo }}</span> {{ b.nombre }}
+                        </td>
+                        <td style="text-align:right;color:var(--blue)">{{ fmt(b.ventas) }}</td>
+                        <td style="text-align:right;color:var(--red)">{{ fmt(b.premios) }}</td>
+                        <td style="text-align:right" :class="b.resultado >= 0 ? 'num-pos' : 'num-neg'">{{ fmt(b.resultado) }}</td>
+                        <td><span :class="b.resultado >= 0 ? 'tag tag-green' : 'tag tag-red'" style="font-size:9px">{{ b.resultado >= 0 ? '✓' : '✗' }}</span></td>
+                      </tr>
+                    </template>
+                  </template>
                 </tbody>
+                <tfoot v-if="grupoCuadres.length">
+                  <tr class="summary-row">
+                    <td><strong>TOTAL</strong></td>
+                    <td style="text-align:right" class="num-pos"><strong>{{ fmt(dashStats.ventas) }}</strong></td>
+                    <td style="text-align:right" class="num-neg"><strong>{{ fmt(dashStats.premios) }}</strong></td>
+                    <td style="text-align:right" :class="dashStats.resultado>=0?'num-pos':'num-neg'"><strong>{{ fmt(dashStats.resultado) }}</strong></td>
+                    <td></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
 
-          <!-- Gráfico -->
           <div class="card">
-            <div class="card-header">
-              <div class="card-title">Ventas vs Premios</div>
-            </div>
+            <div class="card-header"><div class="card-title">Distribución del Período</div></div>
             <div class="card-body">
-              <div class="chart-wrap">
-                <canvas ref="chartBar" id="chartBar"></canvas>
-              </div>
+              <div class="chart-wrap"><canvas id="chartDonut"></canvas></div>
             </div>
           </div>
         </div>
 
-        <div class="section-gap"></div>
+        <div class="section-gap" style="height:16px"></div>
 
-        <!-- Últimas transacciones banco -->
+        <!-- ── ROW 4: Ventas vs Premios bar + Flujo línea ── -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Ventas vs Premios vs Resultado</div></div>
+            <div class="card-body"><div class="chart-wrap"><canvas id="chartBar"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Saldo Flujo de Efectivo</div></div>
+            <div class="card-body"><div class="chart-wrap"><canvas id="chartFlujoLine"></canvas></div></div>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 5: Últimos movimientos banco ── -->
         <div class="card">
           <div class="card-header">
             <div class="card-title">Últimos Movimientos Bancarios</div>
@@ -728,26 +838,177 @@ select.form-control option { background: var(--surface2); }
           </div>
           <div class="card-body" style="padding:0">
             <div class="empty" v-if="!bancoMovs.length">
-              <div class="empty-icon">🏦</div>
-              <p>Sin movimientos registrados</p>
+              <div class="empty-icon">🏦</div><p>Sin movimientos registrados</p>
             </div>
             <table v-else>
               <thead><tr><th>Fecha</th><th>Concepto</th><th>Grupo</th><th>Tipo</th><th>Monto</th><th>Saldo</th></tr></thead>
               <tbody>
-                <tr v-for="m in bancoMovs.slice(0,5)" :key="m.id">
+                <tr v-for="m in bancoMovs.slice(0,6)" :key="m.id">
                   <td>{{ m.fecha }}</td>
                   <td>{{ m.concepto }}</td>
-                  <td>{{ m.grupos?.nombre || '-' }}</td>
+                  <td>{{ m.grupos?.nombre || '—' }}</td>
                   <td><span :class="m.tipo==='ingreso' ? 'tag tag-green' : 'tag tag-red'">{{ m.tipo }}</span></td>
-                  <td :class="m.tipo==='ingreso' ? 'num-pos' : 'num-neg'">
-                    {{ m.tipo==='ingreso' ? '+' : '-' }}{{ fmt(m.monto) }}
-                  </td>
-                  <td>{{ fmt(m.saldo_acumulado) }}</td>
+                  <td :class="m.tipo==='ingreso' ? 'num-pos' : 'num-neg'">{{ m.tipo==='ingreso'?'+':'-' }}{{ fmt(m.monto) }}</td>
+                  <td :class="m.saldo_acumulado>=0?'num-pos':'num-neg'">{{ fmt(m.saldo_acumulado) }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 6: Análisis de Gastos ── -->
+        <div class="card" style="margin-bottom:0">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📋 Análisis de Gastos — Período</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">Desglose por categoría registrada</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <div v-if="!dashGastosCat.length" style="text-align:center;color:var(--muted);padding:24px 0;font-size:12px">
+              Sin gastos registrados para este período
+            </div>
+            <div v-else>
+              <!-- KPIs rápidos de gastos -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                  <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">TOTAL GASTOS</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--red)">{{ fmt(dashKpis.gastos) }}</div>
+                </div>
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                  <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">CATEGORÍAS</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--blue)">{{ dashGastosCat.length }}</div>
+                </div>
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                  <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">% DEL RESULTADO</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--yellow)">
+                    {{ dashStats.ventas > 0 ? (dashKpis.gastos/dashStats.ventas*100).toFixed(1)+'%' : '—' }}
+                  </div>
+                  <div style="font-size:9px;color:var(--muted)">sobre ventas</div>
+                </div>
+              </div>
+
+              <!-- Top categorías tabla -->
+              <div style="margin-bottom:18px">
+                <div style="font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:8px;text-transform:uppercase">Top Categorías</div>
+                <div v-for="c in dashGastosCat.slice(0,6)" :key="c.nombre"
+                     style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                  <div style="width:10px;height:10px;border-radius:50%;flex-shrink:0"
+                       :style="'background:' + (c.color||'#5a6a80')"></div>
+                  <div style="flex:1;font-size:11px">{{ c.nombre }}</div>
+                  <div style="width:120px;background:var(--border);border-radius:3px;height:6px;overflow:hidden">
+                    <div style="height:100%;border-radius:3px;transition:width 0.4s"
+                         :style="'width:'+c.pct+'%;background:'+(c.color||'#5a6a80')"></div>
+                  </div>
+                  <div style="width:52px;text-align:right;font-size:11px;color:var(--red)">{{ fmt(c.total) }}</div>
+                  <div style="width:34px;text-align:right;font-size:10px;color:var(--muted)">{{ c.pct }}%</div>
+                </div>
+              </div>
+
+              <!-- 3 gráficos -->
+              <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:14px">
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:8px;text-align:center">DISTRIBUCIÓN</div>
+                  <div style="height:200px"><canvas id="chartGastoCat"></canvas></div>
+                </div>
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:8px;text-align:center">BARRAS POR CATEGORÍA</div>
+                  <div style="height:200px"><canvas id="chartGastoBars"></canvas></div>
+                </div>
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:8px;text-align:center">OPERATIVO vs PARTICIPACIÓN</div>
+                  <div style="height:200px"><canvas id="chartGastoTipo"></canvas></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 7: Flujo de Efectivo — Análisis Gerencial ── -->
+        <div class="card" style="margin-bottom:0">
+          <div class="card-header">
+            <div>
+              <div class="card-title">💵 Flujo de Efectivo — Análisis del Período</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">Movimientos registrados en el período seleccionado</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="view='flujo'">Ver detalle →</button>
+          </div>
+          <div class="card-body">
+
+            <!-- KPIs rápidos flujo -->
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px">
+              <div style="background:rgba(0,229,160,0.07);border:1px solid rgba(0,229,160,0.2);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">INGRESOS</div>
+                <div style="font-size:17px;font-weight:700;color:var(--accent)">{{ fmt(dashKpis.flujoIngresos||0) }}</div>
+              </div>
+              <div style="background:rgba(255,77,109,0.07);border:1px solid rgba(255,77,109,0.2);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">EGRESOS</div>
+                <div style="font-size:17px;font-weight:700;color:var(--red)">{{ fmt(dashKpis.flujoEgresos||0) }}</div>
+              </div>
+              <div :style="'background:rgba('+(dashKpis.flujoNeto>=0?'0,229,160':'255,77,109')+',0.07);border:1px solid rgba('+(dashKpis.flujoNeto>=0?'0,229,160':'255,77,109')+',0.2);border-radius:8px;padding:12px;text-align:center'">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">NETO PERÍODO</div>
+                <div :class="'font-size:17px;font-weight:700'" :style="'font-size:17px;font-weight:700;color:'+(dashKpis.flujoNeto>=0?'var(--accent)':'var(--red)')">{{ fmt(dashKpis.flujoNeto||0) }}</div>
+              </div>
+              <div style="background:rgba(76,201,240,0.07);border:1px solid rgba(76,201,240,0.2);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">DE CUADRES</div>
+                <div :style="'font-size:17px;font-weight:700;color:var(--blue)'">{{ fmt(dashKpis.flujoCuadre||0) }}</div>
+              </div>
+              <div style="background:rgba(255,209,102,0.07);border:1px solid rgba(255,209,102,0.2);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">PRÉSTAMOS</div>
+                <div style="font-size:17px;font-weight:700;color:var(--yellow)">{{ fmt(dashKpis.flujoPrestamo||0) }}</div>
+              </div>
+            </div>
+
+            <!-- Fila de indicadores secundarios -->
+            <div style="display:flex;gap:16px;margin-bottom:18px;font-size:11px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>
+                <span style="color:var(--muted)">Cobertura gastos:</span>
+                <strong :style="'color:'+(dashKpis.flujoIngresos>dashKpis.gastos?'var(--accent)':'var(--red)')">
+                  {{ dashKpis.gastos>0 ? (dashKpis.flujoIngresos/dashKpis.gastos*100).toFixed(0)+'%' : '—' }}
+                </strong>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--blue)"></div>
+                <span style="color:var(--muted)">Eficiencia flujo:</span>
+                <strong :style="'color:'+(dashKpis.flujoNeto>=0?'var(--accent)':'var(--red)')">
+                  {{ dashKpis.flujoIngresos>0 ? (dashKpis.flujoNeto/dashKpis.flujoIngresos*100).toFixed(1)+'%' : '—' }}
+                </strong>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--yellow)"></div>
+                <span style="color:var(--muted)">Días con movimiento:</span>
+                <strong style="color:var(--text)">{{ (dashKpis.flujoDias||[]).length }}</strong>
+              </div>
+            </div>
+
+            <!-- 4 gráficos flujo -->
+            <div style="display:grid;grid-template-columns:1.6fr 1.6fr 1fr 1fr;gap:14px">
+              <div>
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Ingresos vs Egresos por Día</div>
+                <div style="height:190px"><canvas id="chartFlujoIngEgr"></canvas></div>
+              </div>
+              <div>
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Saldo Acumulado</div>
+                <div style="height:190px"><canvas id="chartFlujoAcum"></canvas></div>
+              </div>
+              <div>
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;text-align:center">Por Origen</div>
+                <div style="height:190px"><canvas id="chartFlujoOrigen"></canvas></div>
+              </div>
+              <div>
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Egresos / Categoría</div>
+                <div style="height:190px"><canvas id="chartFlujoCatEgr"></canvas></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
       </div>
 
       <!-- ══ RESUMEN SEMANAL ══ -->
@@ -905,6 +1166,9 @@ select.form-control option { background: var(--surface2); }
                 {{ b.codigo }} — {{ b.nombre }}
               </option>
             </select>
+            <button class="btn btn-ghost btn-sm" @click="abrirNuevoGasto(cuadreGrupoId, cuadrePeriodoId)" title="Registrar gasto sin salir del cuadre">
+              📋 Registrar Gasto
+            </button>
             <button class="btn btn-primary" @click="loadCuadre"
               :disabled="!cuadreGrupoId||!cuadrePeriodoId||(grupos.find(g=>g.id===cuadreGrupoId)?.modo==='individual_bancas'&&!cuadreBancaId)">
               Cargar Cuadre
@@ -1439,38 +1703,73 @@ select.form-control option { background: var(--surface2); }
         <div class="section-header">
           <div>
             <div class="section-title">Importar Ventas</div>
-            <div class="section-sub">Carga datos del sistema de gestión (CSV/Excel)</div>
+            <div class="section-sub">Carga el archivo Excel exportado del sistema — solo se importan Ventas y Premios</div>
           </div>
         </div>
-        <div class="grid-2">
+
+        <div class="grid-2" style="margin-bottom:20px">
+          <!-- ── Cargar Archivo ── -->
           <div class="card">
-            <div class="card-header"><div class="card-title">📥 Cargar Archivo CSV</div></div>
+            <div class="card-header"><div class="card-title">📥 Cargar Archivo Excel (.xlsx)</div></div>
             <div class="card-body">
               <div class="form-grid">
                 <div class="form-group">
-                  <label class="form-label">Período de destino</label>
-                  <select class="form-control" v-model="importPeriodoId">
+                  <label class="form-label">1. Seleccionar Período de destino</label>
+                  <select class="form-control" v-model="importPeriodoId" @change="checkImportDuplicado">
                     <option value="">— Seleccionar Período —</option>
                     <option v-for="p in periodos" :key="p.id" :value="p.id">
                       {{ p.descripcion || p.fecha_inicio }}
                     </option>
                   </select>
                 </div>
+
+                <!-- Alerta duplicado -->
+                <div v-if="importDuplicado" class="alert alert-error" style="font-size:11px">
+                  ⚠️ <strong>Este período ya tiene {{ importDuplicadoCount }} registros importados.</strong><br>
+                  Para reimportar, primero borra los datos anteriores.
+                  <button class="btn btn-danger btn-sm" style="margin-top:8px;width:100%" @click="borrarImportacion">
+                    🗑️ Borrar importación anterior y cargar de nuevo
+                  </button>
+                </div>
+                <!-- Botón borrar visible siempre que haya data (aunque no esté en flujo duplicado) -->
+                <div v-if="importPeriodoId && !importDuplicado && importPeriodoTieneData">
+                  <button class="btn btn-danger btn-sm" style="width:100%" @click="borrarImportacion">
+                    🗑️ Borrar datos importados de este período
+                  </button>
+                </div>
+
                 <div class="form-group">
-                  <label class="form-label">Archivo CSV</label>
-                  <input type="file" class="form-control" accept=".csv,.txt" @change="handleCSV" ref="csvInput">
+                  <label class="form-label">2. Seleccionar archivo .xlsx</label>
+                  <input type="file" class="form-control" accept=".xlsx,.xls,.csv" @change="handleFile" ref="fileInput"
+                    :disabled="importDuplicado">
+                  <div style="font-size:10px;color:var(--muted);margin-top:4px">
+                    Columnas requeridas: <strong>Usuario, Ventas, Premios</strong>
+                  </div>
                 </div>
-                <div v-if="importPreview.length" class="alert alert-info">
-                  ✅ {{ importPreview.length }} registros detectados — Revisa y confirma
+
+                <div v-if="importPreview.length" class="alert alert-info" style="font-size:11px">
+                  ✅ <strong>{{ importPreview.length }} bancas detectadas</strong> —
+                  {{ importPreview.filter(r=>r._banca).length }} mapeadas correctamente,
+                  {{ importPreview.filter(r=>!r._banca).length }} sin mapear
                 </div>
-                <button class="btn btn-primary" @click="processImport" :disabled="!importPreview.length || !importPeriodoId || importando">
-                  {{ importando ? '⏳ Importando...' : '📥 Importar Datos' }}
-                </button>
+
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-ghost btn-sm" v-if="importPreview.length" @click="importPreview=[];importDuplicado=false">
+                    ✕ Limpiar
+                  </button>
+                  <button class="btn btn-primary" style="flex:1"
+                    @click="processImport"
+                    :disabled="!importPreview.length || !importPeriodoId || importando || importDuplicado || !importPreview.some(r=>r._banca && r._incluir)">
+                    {{ importando ? '⏳ Importando...' : '✅ Confirmar e Importar' }}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- ── Ingreso Manual ── -->
           <div class="card">
-            <div class="card-header"><div class="card-title">📝 Ingreso Manual</div></div>
+            <div class="card-header"><div class="card-title">📝 Ingreso Manual de Venta</div></div>
             <div class="card-body">
               <div class="form-grid">
                 <div class="form-row">
@@ -1485,32 +1784,22 @@ select.form-control option { background: var(--surface2); }
                     <label class="form-label">Banca</label>
                     <select class="form-control" v-model="manualVenta.banca_id">
                       <option value="">— Banca —</option>
-                      <option v-for="b in bancas" :key="b.id" :value="b.id">{{ b.codigo }} - {{ b.nombre }}</option>
+                      <option v-for="b in bancas" :key="b.id" :value="b.id">{{ b.codigo }} — {{ b.nombre }}</option>
                     </select>
                   </div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label">Ventas</label>
+                    <label class="form-label">Ventas RD$</label>
                     <input type="number" class="form-control" v-model.number="manualVenta.ventas" placeholder="0">
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Premios</label>
+                    <label class="form-label">Premios RD$</label>
                     <input type="number" class="form-control" v-model.number="manualVenta.premios" placeholder="0">
                   </div>
                 </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label class="form-label">Recargas</label>
-                    <input type="number" class="form-control" v-model.number="manualVenta.recargas" placeholder="0">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Servicios</label>
-                    <input type="number" class="form-control" v-model.number="manualVenta.servicios" placeholder="0">
-                  </div>
-                </div>
                 <div class="alert alert-info" style="font-size:11px;margin-top:4px">
-                  💡 Los avances y movimientos de efectivo se registran en <strong>Movimientos de Semana</strong>
+                  💡 Recargas, servicios y avances se registran por <strong>Gastos</strong> o <strong>Movimientos de Semana</strong>
                 </div>
                 <button class="btn btn-primary" @click="saveManualVenta" :disabled="!manualVenta.banca_id||!manualVenta.periodo_id">
                   💾 Guardar Venta
@@ -1520,33 +1809,82 @@ select.form-control option { background: var(--surface2); }
           </div>
         </div>
 
-        <!-- Preview table -->
-        <div v-if="importPreview.length" class="card" style="margin-top:20px">
+        <!-- ── Preview editable ── -->
+        <div v-if="importPreview.length" class="card">
           <div class="card-header">
-            <div class="card-title">Vista Previa — {{ importPreview.length }} registros</div>
-          </div>
-          <div class="card-body" style="padding:0">
-            <div class="table-wrap">
-              <table>
-                <thead><tr>
-                  <th>Grupo</th><th>Agencia</th><th>Usuario</th><th>Ventas</th><th>Premios</th><th>Avances</th><th>Comisión</th><th>Beneficio</th>
-                </tr></thead>
-                <tbody>
-                  <tr v-for="(r,i) in importPreview.slice(0,20)" :key="i">
-                    <td>{{ r.grupo }}</td>
-                    <td>{{ r.agencia }}</td>
-                    <td>{{ r.usuario }}</td>
-                    <td>{{ fmt(r.ventas) }}</td>
-                    <td>{{ fmt(r.premios) }}</td>
-                    <td>{{ fmt(r.avances) }}</td>
-                    <td>{{ fmt(r.comision) }}</td>
-                    <td :class="r.beneficio>=0?'num-pos':'num-neg'">{{ fmt(r.beneficio) }}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div>
+              <div class="card-title">Vista Previa — Revisa y edita antes de confirmar</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">
+                Puedes editar Ventas/Premios y excluir filas individualmente antes de importar
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span style="font-size:11px;color:var(--muted)">
+                Total ventas: <strong style="color:var(--accent)">{{ fmt(importPreview.filter(r=>r._incluir).reduce((s,r)=>s+r.ventas,0)) }}</strong>
+              </span>
             </div>
           </div>
+          <div class="card-body" style="padding:0;max-height:520px;overflow-y:auto">
+            <table>
+              <thead><tr style="position:sticky;top:0;z-index:2;background:var(--surface2)">
+                <th style="width:36px;text-align:center">✓</th>
+                <th>Usuario</th>
+                <th>Agencia</th>
+                <th>Banca mapeada</th>
+                <th style="text-align:right">Ventas</th>
+                <th style="text-align:right">Premios</th>
+                <th>Estado</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="(r,i) in importPreview" :key="i"
+                    :style="!r._banca ? 'opacity:0.5;background:rgba(255,77,109,0.04)' : ''">
+                  <td style="text-align:center">
+                    <input type="checkbox" v-model="r._incluir" :disabled="!r._banca" style="accent-color:var(--accent)">
+                  </td>
+                  <td><code style="font-size:11px">{{ r.usuario }}</code></td>
+                  <td style="font-size:11px;color:var(--muted)">{{ r.agencia }}</td>
+                  <td>
+                    <span v-if="r._banca" class="tag tag-green" style="font-size:10px">
+                      {{ r._banca.codigo }} — {{ r._banca.nombre }}
+                    </span>
+                    <span v-else class="tag tag-red" style="font-size:10px">Sin mapear</span>
+                  </td>
+                  <td style="text-align:right">
+                    <input type="number" v-model.number="r.ventas"
+                      style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:5px;padding:3px 7px;width:90px;text-align:right;font-family:var(--font-n);font-size:12px;color:var(--input-text)"
+                      :disabled="!r._banca || !r._incluir">
+                  </td>
+                  <td style="text-align:right">
+                    <input type="number" v-model.number="r.premios"
+                      style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:5px;padding:3px 7px;width:90px;text-align:right;font-family:var(--font-n);font-size:12px;color:var(--input-text)"
+                      :disabled="!r._banca || !r._incluir">
+                  </td>
+                  <td>
+                    <span v-if="!r._banca" class="tag tag-red" style="font-size:9px">⚠ No encontrada</span>
+                    <span v-else-if="r._incluir" class="tag tag-green" style="font-size:9px">✓ Incluir</span>
+                    <span v-else class="tag tag-gray" style="font-size:9px">— Excluir</span>
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr class="summary-row">
+                  <td colspan="4"><strong>TOTAL A IMPORTAR</strong></td>
+                  <td style="text-align:right"><strong>{{ fmt(importPreview.filter(r=>r._incluir).reduce((s,r)=>s+r.ventas,0)) }}</strong></td>
+                  <td style="text-align:right"><strong>{{ fmt(importPreview.filter(r=>r._incluir).reduce((s,r)=>s+r.premios,0)) }}</strong></td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
+
+        <!-- Bancas sin mapear -->
+        <div v-if="importPreview.some(r=>!r._banca)" class="alert alert-error" style="margin-top:14px;font-size:11px">
+          ⚠️ <strong>Bancas sin mapear:</strong>
+          {{ importPreview.filter(r=>!r._banca).map(r=>r.usuario+' ('+r.agencia+')').join(', ') }}
+          — Verifica que el campo <em>usuario_sistema</em> en la banca corresponda al código del archivo.
+        </div>
+
       </div>
 
       <!-- ══ GASTOS ══ -->
@@ -1784,39 +2122,45 @@ select.form-control option { background: var(--surface2); }
                 <th>Balance Part.</th><th>%</th><th>A Pagar</th><th>Pagado</th><th>Arrastre Sig.</th>
               </tr></thead>
               <tbody>
-                <template v-for="p in participacion" :key="p.id">
-                  <tr>
+                <template v-for="p in participacionAgrupada" :key="p._key||p.id">
+                  <!-- Fila principal: grupo (total) o banca estándar -->
+                  <tr :style="p.esGrupoAgrupado?'background:rgba(255,209,102,0.04)':''">
                     <td>
                       <strong>{{ p.grupos?.nombre }}</strong>
-                      <button v-if="p.bancas" class="btn btn-ghost btn-xs" style="padding:1px 5px;margin-left:4px;font-size:10px"
-                        @click="partExpandido[p.id]=!partExpandido[p.id]">
-                        {{ partExpandido[p.id] ? '▲' : '▼' }}
+                      <span v-if="p.esGrupoAgrupado" class="tag tag-yellow" style="font-size:9px;margin-left:4px">🏦</span>
+                      <button v-if="p.esGrupoAgrupado && p._bancas.length" class="btn btn-ghost btn-xs"
+                        style="padding:1px 5px;margin-left:4px;font-size:10px"
+                        @click="partExpandido[p._key]=!partExpandido[p._key]">
+                        {{ partExpandido[p._key] ? '▲' : '▼' }}
                       </button>
                     </td>
                     <td>{{ p.periodos?.descripcion || p.periodos?.fecha_inicio }}</td>
                     <td :class="p.beneficio_semana>=0?'num-pos':'num-neg'">{{ fmt(p.beneficio_semana) }}</td>
                     <td :class="p.arrastre_anterior>=0?'':'num-neg'">{{ fmt(p.arrastre_anterior) }}</td>
                     <td :class="p.balance_participacion>=0?'num-pos':'num-neg'">{{ fmt(p.balance_participacion) }}</td>
-                    <td>{{ p.porcentaje }}%</td>
+                    <td>{{ p.esGrupoAgrupado ? '—' : p.porcentaje+'%' }}</td>
                     <td :class="p.monto_a_pagar>0?'num-pos':''">{{ fmt(p.monto_a_pagar) }}</td>
                     <td :class="p.pagado>0?'num-pos':''">{{ fmt(p.pagado) }}</td>
                     <td :class="p.arrastre_siguiente>=0?'':'num-neg'">{{ fmt(p.arrastre_siguiente) }}</td>
                   </tr>
-                  <tr v-if="p.bancas && partExpandido[p.id]"
-                      style="background:rgba(255,209,102,0.06);font-size:12px">
-                    <td style="padding-left:28px;color:var(--muted)">
-                      ↳ <span class="tag tag-yellow" style="font-size:9px">{{ p.bancas?.codigo }}</span>
-                      {{ p.bancas?.nombre }}
-                    </td>
-                    <td>{{ p.periodos?.descripcion || p.periodos?.fecha_inicio }}</td>
-                    <td :class="p.beneficio_semana>=0?'num-pos':'num-neg'">{{ fmt(p.beneficio_semana) }}</td>
-                    <td :class="p.arrastre_anterior>=0?'':'num-neg'">{{ fmt(p.arrastre_anterior) }}</td>
-                    <td :class="p.balance_participacion>=0?'num-pos':'num-neg'">{{ fmt(p.balance_participacion) }}</td>
-                    <td>{{ p.porcentaje }}%</td>
-                    <td :class="p.monto_a_pagar>0?'num-pos':''">{{ fmt(p.monto_a_pagar) }}</td>
-                    <td :class="p.pagado>0?'num-pos':''">{{ fmt(p.pagado) }}</td>
-                    <td :class="p.arrastre_siguiente>=0?'':'num-neg'">{{ fmt(p.arrastre_siguiente) }}</td>
-                  </tr>
+                  <!-- Drilldown: solo bancas que tienen registro de participación -->
+                  <template v-if="p.esGrupoAgrupado && partExpandido[p._key] && p._bancas.length">
+                    <tr v-for="b in p._bancas" :key="b.id"
+                        style="background:rgba(255,209,102,0.07);font-size:12px">
+                      <td style="padding-left:28px;color:var(--muted)">
+                        ↳ <span class="tag tag-yellow" style="font-size:9px">{{ b.bancas?.codigo }}</span>
+                        {{ b.bancas?.nombre }}
+                      </td>
+                      <td>{{ b.periodos?.descripcion || b.periodos?.fecha_inicio }}</td>
+                      <td :class="b.beneficio_semana>=0?'num-pos':'num-neg'">{{ fmt(b.beneficio_semana) }}</td>
+                      <td :class="b.arrastre_anterior>=0?'':'num-neg'">{{ fmt(b.arrastre_anterior) }}</td>
+                      <td :class="b.balance_participacion>=0?'num-pos':'num-neg'">{{ fmt(b.balance_participacion) }}</td>
+                      <td>{{ b.porcentaje }}%</td>
+                      <td :class="b.monto_a_pagar>0?'num-pos':''">{{ fmt(b.monto_a_pagar) }}</td>
+                      <td :class="b.pagado>0?'num-pos':''">{{ fmt(b.pagado) }}</td>
+                      <td :class="b.arrastre_siguiente>=0?'':'num-neg'">{{ fmt(b.arrastre_siguiente) }}</td>
+                    </tr>
+                  </template>
                 </template>
               </tbody>
             </table>
@@ -3110,13 +3454,25 @@ select.form-control option { background: var(--surface2); }
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Categoría de Gasto</label>
-              <select class="form-control" v-model="gastoFrm.categoria_id" @change="gastoFrm.tipo=categoriaTipo(gastoFrm.categoria_id)">
+              <select class="form-control" v-model="gastoFrm.categoria_id">
                 <option value="">— Seleccionar categoría —</option>
                 <option v-for="c in categorias.filter(c=>c.tipo==='egreso'&&c.activo)" :key="c.id" :value="c.id">
                   {{ c.nombre }}
                 </option>
               </select>
             </div>
+            <div class="form-group">
+              <label class="form-label">Tipo de Gasto</label>
+              <select class="form-control" v-model="gastoFrm.tipo">
+                <option value="operativo">Operativo</option>
+                <option value="central">Central</option>
+                <option value="sistema">Sistema</option>
+                <option value="equipo">Equipo</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label class="form-label">Monto</label>
               <input type="number" class="form-control" v-model.number="gastoFrm.monto" placeholder="0">
@@ -3222,18 +3578,25 @@ createApp({
       loadCategorias();
     }
     function categoriaTipo(id) {
+      // Esta función ya no modifica gastoFrm.tipo — el tipo del gasto
+      // es independiente del tipo de la categoría ('egreso'/'ingreso')
       const c = categorias.value.find(c=>c.id===id);
-      return c?.tipo || 'egreso';
+      return c?.tipo || 'egreso'; // solo para uso interno de categorias, no para gastos.tipo
     }
 
     // ── TOAST ──
     const toasts = ref([]);
     function toast(msg, type='success') {
       const icons = { success:'success', error:'error', warning:'warning', info:'info' };
+      // Detectar si es un mensaje de guardado/edición para fuente más pequeña
+      const isSaveMsg = /guard|edit|actualiz|registr|guarda|eliminad|borrad/i.test(msg);
       Swal.fire({
-        toast: true, position: 'top-end',
+        toast: true, position: 'bottom-end',
         icon: icons[type] || 'info', title: msg,
-        showConfirmButton: false, timer: 3200, timerProgressBar: true,
+        showConfirmButton: false,
+        timer: isSaveMsg ? 1600 : 2200,
+        timerProgressBar: true,
+        customClass: isSaveMsg ? { title: 'swal-title-sm' } : {},
         didOpen: (t) => { t.addEventListener('mouseenter', Swal.stopTimer); t.addEventListener('mouseleave', Swal.resumeTimer); }
       });
     }
@@ -3386,87 +3749,518 @@ createApp({
     const loadingDash = ref(false);
     const grupoCuadres = ref([]);
     const dashStats = ref({ ventas: 0, premios: 0, comisiones: 0, resultado: 0, bancas_activas: 0 });
-    let barChart = null;
+    const dashKpis = ref({ gastos: 0, flujoIngresos: 0, flujoEgresos: 0, flujoNeto: 0, saldoBanco: 0, participacionTotal: 0, participacionPagada: 0 });
+    const dashGastosCat = ref([]);  // [{ nombre, color, total, pct }] agrupado por categoría
+    const dashGruposBancas = ref({});   // { grupo_id: [banca rows] } for drilldown
+    const dashExpandido = Vue.reactive({});
+    let barChart = null; let donutChart = null; let flujoLineChart = null;
+
+    // ── THEME MODE ──
+    const themeMode = ref(localStorage.getItem('themeMode') || 'auto');
+    const isDark = computed(() => {
+      if (themeMode.value === 'dark') return true;
+      if (themeMode.value === 'light') return false;
+      return new Date().getHours() >= 19 || new Date().getHours() < 7;
+    });
+    function toggleTheme() {
+      const modes = ['auto','dark','light'];
+      themeMode.value = modes[(modes.indexOf(themeMode.value)+1) % 3];
+      localStorage.setItem('themeMode', themeMode.value);
+      applyTheme();
+    }
+    function applyTheme() {
+      const dark = isDark.value;
+      const d = document.documentElement;
+      const s = (k,v) => d.style.setProperty(k, v);
+
+      // ── Fondos y superficies ──
+      s('--bg',        dark ? '#0a0d12'  : '#eef2f8');
+      s('--surface',   dark ? '#111620'  : '#ffffff');
+      s('--surface2',  dark ? '#161d2b'  : '#f4f7fb');
+      s('--border',    dark ? '#1e2a3a'  : '#c5d1e8');
+      s('--border2',   dark ? '#253347'  : '#a8b9d0');
+
+      // ── Texto ──
+      s('--text',      dark ? '#e8edf5'  : '#0f1f3d');
+      s('--muted',     dark ? '#5a6a80'  : '#4a5e7a');
+
+      // ── Colores funcionales — Royal Blue en claro ──
+      s('--accent',    dark ? '#00e5a0'  : '#3b7dd8');   // verde neón / Azul medio suave
+      s('--accent2',   dark ? '#00b87a'  : '#2563c0');   // verde2  / azul profundo
+      s('--red',       dark ? '#ff4d6d'  : '#c0152d');   // rojo neón / rojo sólido
+      s('--yellow',    dark ? '#ffd166'  : '#b45309');   // amarillo / ámbar oscuro
+      s('--blue',      dark ? '#4cc9f0'  : '#1e7bb8');   // celeste neón / azul cielo
+
+      // ── Glow y sombras ──
+      s('--card-glow', dark
+        ? '0 0 30px rgba(0,229,160,0.04)'
+        : '0 2px 12px rgba(26,86,219,0.07)');
+
+      // ── Input (siempre amarillo identificador) ──
+      s('--input-bg',     '#FDFFEF');
+      s('--input-text',   '#0f1f3d');
+      s('--input-border', dark ? '#2a3f55' : '#c8d2a0');
+
+      // ── Tags y badges con accent actual ──
+      d.setAttribute('data-theme', dark ? 'dark' : 'light');
+    }
+    // Apply on mount + auto-check every minute
+    applyTheme();
+    setInterval(() => { if (themeMode.value === 'auto') applyTheme(); }, 60000);
+    watch(isDark, applyTheme);
 
     async function loadDashboard() {
       if (!sb || !selectedPeriodoId.value) return;
       loadingDash.value = true;
 
-      // ── Cargar ventas_semana en tiempo real (sin esperar guardar cuadre) ──
+      // ── Ventas_semana agrupadas por grupo ──
       const { data: ventasData } = await sb.from('ventas_semana')
-        .select('*, bancas(id, codigo, porcentaje_comision, grupo_id)')
+        .select('*, bancas(id, codigo, nombre, porcentaje_comision, grupo_id)')
         .eq('periodo_id', selectedPeriodoId.value);
 
-      // Agrupar por grupo y calcular
       const groupMap = {};
+      const bancasDetalle = {}; // grupo_id → array of banca rows
       for (const v of (ventasData || [])) {
         const gid = v.bancas?.grupo_id || 'sin_grupo';
         const g = grupos.value.find(g => g.id === gid);
+        const modo = g?.modo || 'estandar';
         if (!groupMap[gid]) groupMap[gid] = {
           id: gid, grupos: { nombre: g?.nombre || 'Sin Grupo' },
-          total_ventas: 0, total_premios: 0, total_comisiones: 0,
-          resultado_loteria: 0
+          modo, total_ventas: 0, total_premios: 0, total_comisiones: 0, resultado_loteria: 0
         };
         const vtas = v.ventas || 0;
         const prem = v.premios || 0;
-        const pct = v.bancas?.porcentaje_comision || 0;
-        const com = vtas * pct / 100;
-        const resNeto = (vtas - prem) - com;
-        groupMap[gid].total_ventas += vtas;
-        groupMap[gid].total_premios += prem;
+        const com  = vtas * (v.bancas?.porcentaje_comision || 0) / 100;
+        groupMap[gid].total_ventas     += vtas;
+        groupMap[gid].total_premios    += prem;
         groupMap[gid].total_comisiones += com;
-        groupMap[gid].resultado_loteria += resNeto;
-      }
-
-      // Si hay cuadres guardados, actualizar con los datos guardados (más completos)
-      const { data: cuadres } = await sb.from('cuadres_grupo')
-        .select('*, grupos(nombre)')
-        .eq('periodo_id', selectedPeriodoId.value);
-      if (cuadres && cuadres.length > 0) {
-        // Mezclar: usar cuadres_grupo cuando existe, ventas_semana para los que aún no se guardaron
-        const savedIds = new Set(cuadres.map(c => c.grupo_id));
-        for (const c of cuadres) groupMap[c.grupo_id] = c;
-        // Mantener live data para grupos sin cuadre guardado
-      }
-
-      grupoCuadres.value = Object.values(groupMap).filter(g => g.total_ventas > 0 || g.resultado_loteria !== 0);
-
-      dashStats.value = {
-        ventas:    grupoCuadres.value.reduce((s,g)=>s+(g.total_ventas||0), 0),
-        premios:   grupoCuadres.value.reduce((s,g)=>s+(g.total_premios||0), 0),
-        comisiones:grupoCuadres.value.reduce((s,g)=>s+(g.total_comisiones||0), 0),
-        resultado: grupoCuadres.value.reduce((s,g)=>s+(g.resultado_loteria||0), 0),
-        bancas_activas: bancas.value.filter(b=>b.activo).length
-      };
-      loadingDash.value = false;
-      await nextTick();
-      renderBarChart();
-    }
-
-    function renderBarChart() {
-      const canvas = document.getElementById('chartBar');
-      if (!canvas) return;
-      if (barChart) barChart.destroy();
-      const labels = grupoCuadres.value.map(g => g.grupos?.nombre || '?');
-      barChart = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [
-            { label: 'Ventas', data: grupoCuadres.value.map(g=>g.total_ventas||0), backgroundColor: 'rgba(76,201,240,0.7)', borderRadius: 4 },
-            { label: 'Premios', data: grupoCuadres.value.map(g=>g.total_premios||0), backgroundColor: 'rgba(255,77,109,0.7)', borderRadius: 4 },
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { labels: { color: '#5a6a80', font: { family: 'DM Mono', size: 11 } } } },
-          scales: {
-            x: { grid: { color: '#1e2a3a' }, ticks: { color: '#5a6a80', font: { family: 'DM Mono' } } },
-            y: { grid: { color: '#1e2a3a' }, ticks: { color: '#5a6a80', font: { family: 'DM Mono' },
-              callback: v => '$' + (v/1000).toFixed(0) + 'K' } }
+        groupMap[gid].resultado_loteria+= (vtas - prem) - com;
+        // Guardar detalle de banca para drilldown de grupos Capital
+        if (modo === 'individual_bancas') {
+          if (!bancasDetalle[gid]) bancasDetalle[gid] = [];
+          const existing = bancasDetalle[gid].find(b => b.banca_id === v.banca_id);
+          if (!existing) bancasDetalle[gid].push({
+            banca_id: v.banca_id, codigo: v.bancas?.codigo, nombre: v.bancas?.nombre,
+            ventas: vtas, premios: prem, comision: com, resultado: (vtas - prem) - com
+          });
+          else {
+            existing.ventas += vtas; existing.premios += prem;
+            existing.comision += com; existing.resultado += (vtas - prem) - com;
           }
         }
-      });
+      }
+
+      // Cuadres guardados (grupos estándar) — no aplica a Capital que usa cuadres_banca
+      const { data: cuadres } = await sb.from('cuadres_grupo')
+        .select('*, grupos(nombre)').eq('periodo_id', selectedPeriodoId.value);
+      for (const c of (cuadres || [])) {
+        // Solo reemplazar si NO es individual_bancas (esos se calculan desde ventas)
+        const modo = grupos.value.find(g=>g.id===c.grupo_id)?.modo || 'estandar';
+        if (modo !== 'individual_bancas') groupMap[c.grupo_id] = { ...c, modo };
+      }
+
+      // Para Capital: complementar detalle desde cuadres_banca si existen
+      for (const gid of Object.keys(bancasDetalle)) {
+        const { data: cb } = await sb.from('cuadres_banca')
+          .select('*, bancas(codigo, nombre)')
+          .eq('grupo_id', gid).eq('periodo_id', selectedPeriodoId.value);
+        if (cb && cb.length) {
+          bancasDetalle[gid] = cb.map(c => ({
+            banca_id: c.banca_id, codigo: c.bancas?.codigo, nombre: c.bancas?.nombre,
+            ventas: c.ventas, premios: c.premios, comision: c.comision, resultado: c.resultado_periodo
+          }));
+        }
+      }
+      dashGruposBancas.value = bancasDetalle;
+
+      grupoCuadres.value = Object.values(groupMap)
+        .filter(g => g.total_ventas > 0 || g.resultado_loteria !== 0)
+        .sort((a,b) => (a.grupos?.nombre||'').localeCompare(b.grupos?.nombre||''));
+
+      dashStats.value = {
+        ventas:        grupoCuadres.value.reduce((s,g)=>s+(g.total_ventas||0), 0),
+        premios:       grupoCuadres.value.reduce((s,g)=>s+(g.total_premios||0), 0),
+        comisiones:    grupoCuadres.value.reduce((s,g)=>s+(g.total_comisiones||0), 0),
+        resultado:     grupoCuadres.value.reduce((s,g)=>s+(g.resultado_loteria||0), 0),
+        bancas_activas: bancas.value.filter(b=>b.activo).length
+      };
+
+      // ── KPIs adicionales: gastos, flujo, participación ──
+      const [gastosRes, flujoRes, partRes, bancoRes] = await Promise.all([
+        sb.from('gastos').select('monto,tipo,categoria_id,categorias(nombre,color)').eq('periodo_id', selectedPeriodoId.value),
+        sb.from('flujo_efectivo').select('tipo,monto,fecha,origen,categoria_id,categorias(nombre,color)').eq('periodo_id', selectedPeriodoId.value),
+        sb.from('participacion_acumulada').select('monto_a_pagar,pagado').eq('periodo_id', selectedPeriodoId.value),
+        sb.from('cuenta_banco').select('tipo,monto').order('fecha').order('created_at')
+      ]);
+      const gastos = (gastosRes.data||[]);
+      const flujo  = (flujoRes.data||[]);
+      const part   = (partRes.data||[]);
+      const banco  = (bancoRes.data||[]);
+      let saldoB = 0; banco.forEach(m => saldoB += m.tipo==='ingreso' ? m.monto : -m.monto);
+      const totalGastos = gastos.reduce((s,g)=>s+(g.monto||0), 0);
+      const flujoIng   = flujo.filter(m=>m.tipo==='ingreso');
+      const flujoEgr   = flujo.filter(m=>m.tipo==='egreso');
+      const flujoIngTotal = flujoIng.reduce((s,m)=>s+m.monto,0);
+      const flujoEgrTotal = flujoEgr.reduce((s,m)=>s+m.monto,0);
+      const flujoNeto  = flujoIngTotal - flujoEgrTotal;
+      // Flujo por origen
+      const flujoCuadre  = flujo.filter(m=>m.origen==='cuadre').reduce((s,m)=>s+(m.tipo==='ingreso'?m.monto:-m.monto),0);
+      const flujoPrestamo= flujo.filter(m=>m.origen==='prestamo').reduce((s,m)=>s+(m.tipo==='ingreso'?m.monto:-m.monto),0);
+      const flujoManual  = flujo.filter(m=>!m.origen||m.origen==='manual').reduce((s,m)=>s+(m.tipo==='ingreso'?m.monto:-m.monto),0);
+      // Flujo por categoría (top 5 egresos)
+      const flujoCatMap  = {};
+      for (const m of flujoEgr) {
+        const k = m.categoria_id || '__sin__';
+        const n = m.categorias?.nombre || 'Sin Categoría';
+        const c = m.categorias?.color || '#5a6a80';
+        if (!flujoCatMap[k]) flujoCatMap[k] = { nombre: n, color: c, total: 0 };
+        flujoCatMap[k].total += m.monto;
+      }
+      // Flujo por día (para línea)
+      const flujoDiaMap = {};
+      for (const m of flujo) {
+        const d = m.fecha || '?';
+        if (!flujoDiaMap[d]) flujoDiaMap[d] = { ing: 0, egr: 0 };
+        m.tipo==='ingreso' ? (flujoDiaMap[d].ing += m.monto) : (flujoDiaMap[d].egr += m.monto);
+      }
+      const flujoDias  = Object.keys(flujoDiaMap).sort();
+      let acum = 0;
+      const flujoAcumLine = flujoDias.map(d => { acum += flujoDiaMap[d].ing - flujoDiaMap[d].egr; return acum; });
+      dashKpis.value = {
+        gastos:              totalGastos,
+        flujoIngresos:       flujoIngTotal,
+        flujoEgresos:        flujoEgrTotal,
+        flujoNeto,
+        flujoCuadre, flujoPrestamo, flujoManual,
+        flujoCatEgr:         Object.values(flujoCatMap).sort((a,b)=>b.total-a.total).slice(0,6),
+        flujoDias, flujoIngDia: flujoDias.map(d=>flujoDiaMap[d].ing),
+        flujoEgrDia: flujoDias.map(d=>flujoDiaMap[d].egr),
+        flujoAcumLine,
+        saldoBanco:          saldoB,
+        participacionTotal:  part.reduce((s,p)=>s+(p.monto_a_pagar||0),0),
+        participacionPagada: part.reduce((s,p)=>s+(p.pagado||0),0),
+      };
+
+      // ── Backfill DB: asignar categoria_id a gastos viejos sin ella ──
+      const catPartMatch = categorias.value.find(c => c.tipo==='egreso' && c.nombre?.toLowerCase().includes('participac'));
+      const gastosOrfanos = gastos.filter(g => !g.categoria_id && g.tipo==='participacion');
+      if (catPartMatch && gastosOrfanos.length) {
+        // Actualizar en DB todos los gastos participacion sin categoria (fire-and-forget)
+        sb.from('gastos').update({ categoria_id: catPartMatch.id })
+          .eq('tipo', 'participacion').is('categoria_id', null)
+          .then(() => {}); // no bloquear el render
+        // Actualizar en memoria para este render
+        gastosOrfanos.forEach(g => {
+          g.categoria_id = catPartMatch.id;
+          g.categorias = { nombre: catPartMatch.nombre, color: catPartMatch.color };
+        });
+      }
+
+      // ── Gastos por categoría ──
+      // Fallback: si no hay categoria_id, inferir por tipo
+      const catFallback = (g) => {
+        if (g.tipo === 'participacion') {
+          const c = catPartMatch || categorias.value.find(c=>c.nombre?.toLowerCase().includes('participac'));
+          return c ? { id: c.id, nombre: c.nombre, color: c.color } : { nombre: 'Participación', color: '#ffd166' };
+        }
+        return { nombre: 'Sin Categoría', color: '#5a6a80' };
+      };
+      const catMap = {};
+      for (const g of gastos) {
+        const cat   = g.categorias || catFallback(g);
+        const key   = g.categoria_id || ('__tipo_' + g.tipo);
+        const label = cat.nombre;
+        const color = cat.color || '#5a6a80';
+        if (!catMap[key]) catMap[key] = { nombre: label, color, total: 0 };
+        catMap[key].total += g.monto || 0;
+      }
+      // También bucket manual: operativo vs participación
+      const opTotal   = gastos.filter(g=>g.tipo!=='participacion').reduce((s,g)=>s+(g.monto||0),0);
+      const partGasto = gastos.filter(g=>g.tipo==='participacion').reduce((s,g)=>s+(g.monto||0),0);
+      dashGastosCat.value = Object.values(catMap)
+        .sort((a,b) => b.total - a.total)
+        .map(c => ({ ...c, pct: totalGastos > 0 ? Math.round(c.total/totalGastos*100) : 0 }));
+      // Add tipo summary as last two entries (used for stacked chart)
+      dashGastosCat.value._opTotal   = opTotal;
+      dashGastosCat.value._partGasto = partGasto;
+
+      loadingDash.value = false;
+      await nextTick();
+      renderDashCharts();
+      renderGastosCharts();
+      renderFlujoKpiCharts();
+    }
+
+    function renderDashCharts() {
+      const isDarkMode = isDark.value;
+      const gridColor = isDarkMode ? '#1e2a3a' : '#e8ecf2';
+      const tickColor = isDarkMode ? '#5a6a80' : '#7a8a9a';
+      const font = { family: 'DM Mono', size: 11 };
+
+      // Chart 1: Ventas vs Premios por grupo
+      const c1 = document.getElementById('chartBar');
+      if (c1) {
+        if (barChart) barChart.destroy();
+        const labels = grupoCuadres.value.map(g => g.grupos?.nombre || '?');
+        barChart = new Chart(c1, {
+          type: 'bar',
+          data: { labels, datasets: [
+            { label: 'Ventas',   data: grupoCuadres.value.map(g=>g.total_ventas||0),   backgroundColor: 'rgba(76,201,240,0.75)', borderRadius: 5 },
+            { label: 'Premios',  data: grupoCuadres.value.map(g=>g.total_premios||0),  backgroundColor: 'rgba(255,77,109,0.75)', borderRadius: 5 },
+            { label: 'Resultado',data: grupoCuadres.value.map(g=>g.resultado_loteria||0), backgroundColor: grupoCuadres.value.map(g=>g.resultado_loteria>=0?'rgba(0,229,160,0.75)':'rgba(255,77,109,0.5)'), borderRadius: 5 },
+          ]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: tickColor, font } } },
+            scales: {
+              x: { grid: { color: gridColor }, ticks: { color: tickColor, font } },
+              y: { grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v => '$'+(v/1000).toFixed(0)+'K' } }
+            }
+          }
+        });
+      }
+
+      // Chart 2: Donut distribución gastos vs comisiones vs resultado
+      const c2 = document.getElementById('chartDonut');
+      if (c2) {
+        if (donutChart) donutChart.destroy();
+        const ds = dashStats.value;
+        donutChart = new Chart(c2, {
+          type: 'doughnut',
+          data: { labels: ['Premios','Comisiones','Gastos','Resultado'],
+            datasets: [{ data: [ds.premios, ds.comisiones, dashKpis.value.gastos, Math.max(ds.resultado,0)],
+              backgroundColor: ['rgba(255,77,109,0.8)','rgba(255,209,102,0.8)','rgba(76,201,240,0.6)','rgba(0,229,160,0.8)'],
+              borderWidth: 0, hoverOffset: 6 }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, cutout: '68%',
+            plugins: { legend: { position: 'bottom', labels: { color: tickColor, font, padding: 12 } } }
+          }
+        });
+      }
+
+      // Chart 3: Flujo de efectivo acumulado (línea) — un punto por día
+      const c3 = document.getElementById('chartFlujoLine');
+      if (c3 && (dashKpis.value.flujoDias||[]).length) {
+        if (flujoLineChart) flujoLineChart.destroy();
+        const lineLabels = dashKpis.value.flujoDias.map(d => d.substring(5));
+        const lineSaldo  = dashKpis.value.flujoAcumLine || [];
+        const lastSaldo  = lineSaldo.slice(-1)[0] || 0;
+        const lColor  = lastSaldo >= 0 ? 'rgba(0,229,160,0.95)' : 'rgba(255,77,109,0.95)';
+        const bgColor = lastSaldo >= 0 ? 'rgba(0,229,160,0.10)' : 'rgba(255,77,109,0.08)';
+        const ptColor = lineSaldo.map(v => v >= 0 ? 'rgba(0,229,160,1)' : 'rgba(255,77,109,1)');
+        flujoLineChart = new Chart(c3, {
+          type: 'line',
+          data: { labels: lineLabels, datasets: [{
+            label: 'Saldo del Día',
+            data: lineSaldo,
+            borderColor: lColor,
+            backgroundColor: bgColor,
+            pointBackgroundColor: ptColor,
+            pointBorderColor: ptColor,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            borderWidth: 2,
+            fill: true,
+            tension: 0.25
+          }]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { labels: { color: tickColor, font } },
+              tooltip: {
+                callbacks: {
+                  label: ctx => ' Saldo: $' + ctx.parsed.y.toLocaleString('es-DO')
+                }
+              }
+            },
+            scales: {
+              x: { grid: { color: gridColor }, ticks: { color: tickColor, font, maxTicksLimit: 10 } },
+              y: { grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v => '$'+(v/1000).toFixed(0)+'K' },
+                afterDataLimits(scale) { scale.max = scale.max * 1.08; } }
+            }
+          }
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // FLUJO KPI CHARTS
+    let flujoIngEgrChart = null; let flujoAcumChart = null; let flujoOrigenChart = null; let flujoCatEgrChart = null;
+    function renderFlujoKpiCharts() {
+      const k         = dashKpis.value;
+      const isDarkMode= isDark.value;
+      const grid      = isDarkMode ? '#1e2a3a' : '#e8ecf2';
+      const tick      = isDarkMode ? '#5a6a80' : '#7a8a9a';
+      const font      = { family: 'DM Mono', size: 10 };
+      const dias      = k.flujoDias  || [];
+      const labDias   = dias.map(d => d.substring(5)); // MM-DD
+
+      // Chart 1: Barras Ingresos vs Egresos por día
+      const c1 = document.getElementById('chartFlujoIngEgr');
+      if (c1) {
+        if (flujoIngEgrChart) flujoIngEgrChart.destroy();
+        flujoIngEgrChart = new Chart(c1, {
+          type: 'bar',
+          data: { labels: labDias, datasets: [
+            { label: 'Ingresos', data: k.flujoIngDia||[], backgroundColor: 'rgba(0,229,160,0.75)', borderRadius: 3 },
+            { label: 'Egresos',  data: k.flujoEgrDia||[], backgroundColor: 'rgba(255,77,109,0.75)', borderRadius: 3 },
+          ]},
+          options: { responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ labels:{ color:tick, font, padding:10 } } },
+            scales:{
+              x:{ stacked:false, grid:{color:grid}, ticks:{color:tick,font,maxTicksLimit:10} },
+              y:{ grid:{color:grid}, ticks:{color:tick,font,callback:v=>'$'+(v/1000).toFixed(0)+'K'} }
+            }
+          }
+        });
+      }
+
+      // Chart 2: Línea saldo acumulado
+      const c2 = document.getElementById('chartFlujoAcum');
+      if (c2) {
+        if (flujoAcumChart) flujoAcumChart.destroy();
+        const lineColor = (k.flujoAcumLine||[]).slice(-1)[0] >= 0 ? 'rgba(0,229,160,0.9)' : 'rgba(255,77,109,0.9)';
+        const fillColor = (k.flujoAcumLine||[]).slice(-1)[0] >= 0 ? 'rgba(0,229,160,0.07)' : 'rgba(255,77,109,0.07)';
+        flujoAcumChart = new Chart(c2, {
+          type: 'line',
+          data: { labels: labDias, datasets: [{
+            label: 'Saldo Acumulado', data: k.flujoAcumLine||[],
+            borderColor: lineColor, backgroundColor: fillColor,
+            borderWidth: 2, pointRadius: 2, fill: true, tension: 0.3
+          }]},
+          options: { responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ labels:{ color:tick, font } } },
+            scales:{
+              x:{ grid:{color:grid}, ticks:{color:tick,font,maxTicksLimit:10} },
+              y:{ grid:{color:grid}, ticks:{color:tick,font,callback:v=>'$'+(v/1000).toFixed(0)+'K'} }
+            }
+          }
+        });
+      }
+
+      // Chart 3: Donut por origen (cuadre / préstamo / manual)
+      const c3 = document.getElementById('chartFlujoOrigen');
+      if (c3) {
+        if (flujoOrigenChart) flujoOrigenChart.destroy();
+        flujoOrigenChart = new Chart(c3, {
+          type: 'doughnut',
+          data: { labels: ['Cuadres','Préstamos','Manual'],
+            datasets:[{ data:[Math.abs(k.flujoCuadre||0), Math.abs(k.flujoPrestamo||0), Math.abs(k.flujoManual||0)],
+              backgroundColor:['rgba(0,229,160,0.8)','rgba(76,201,240,0.8)','rgba(255,209,102,0.8)'],
+              borderWidth:0, hoverOffset:6
+            }]
+          },
+          options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+            plugins:{ legend:{ position:'bottom', labels:{ color:tick, font, padding:10, boxWidth:10 } } }
+          }
+        });
+      }
+
+      // Chart 4: Barras horizontales egresos por categoría
+      const c4 = document.getElementById('chartFlujoCatEgr');
+      if (c4 && (k.flujoCatEgr||[]).length) {
+        if (flujoCatEgrChart) flujoCatEgrChart.destroy();
+        const cats = k.flujoCatEgr;
+        flujoCatEgrChart = new Chart(c4, {
+          type: 'bar',
+          data: { labels: cats.map(c=>c.nombre), datasets:[{
+            label:'Egresos RD$', data: cats.map(c=>c.total),
+            backgroundColor: cats.map(c=>(c.color||'#5a6a80')+'bb'),
+            borderRadius:4
+          }]},
+          options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
+            plugins:{ legend:{ display:false } },
+            scales:{
+              x:{ grid:{color:grid}, ticks:{color:tick,font,callback:v=>'$'+(v/1000).toFixed(0)+'K'} },
+              y:{ grid:{display:false}, ticks:{color:tick,font} }
+            }
+          }
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // GASTOS CHARTS (called from renderDashCharts)
+    let gastoCatChart = null; let gastoBarsChart = null; let gastoTipoChart = null;
+    function renderGastosCharts() {
+      const isDarkMode = isDark.value;
+      const gridColor  = isDarkMode ? '#1e2a3a' : '#e8ecf2';
+      const tickColor  = isDarkMode ? '#5a6a80' : '#7a8a9a';
+      const font       = { family: 'DM Mono', size: 11 };
+      const cats       = dashGastosCat.value;
+      if (!cats || !cats.length) return;
+
+      const labels = cats.map(c => c.nombre);
+      const totals = cats.map(c => c.total);
+      const colors = cats.map(c => c.color || '#5a6a80');
+      const bgColors = colors.map(c => c + 'cc');
+
+      // Chart A: Donut por categoría
+      const cA = document.getElementById('chartGastoCat');
+      if (cA) {
+        if (gastoCatChart) gastoCatChart.destroy();
+        gastoCatChart = new Chart(cA, {
+          type: 'doughnut',
+          data: { labels, datasets: [{ data: totals, backgroundColor: bgColors, borderWidth: 0, hoverOffset: 8 }] },
+          options: { responsive: true, maintainAspectRatio: false, cutout: '60%',
+            plugins: { legend: { position: 'right', labels: { color: tickColor, font, padding: 10, boxWidth: 12,
+              generateLabels: chart => chart.data.labels.map((l,i) => ({
+                text: l + '  $' + (chart.data.datasets[0].data[i]/1000).toFixed(1) + 'K',
+                fillStyle: chart.data.datasets[0].backgroundColor[i],
+                strokeStyle: 'transparent', index: i
+              }))
+            }}}
+          }
+        });
+      }
+
+      // Chart B: Barras horizontales top categorías
+      const cB = document.getElementById('chartGastoBars');
+      if (cB) {
+        if (gastoBarsChart) gastoBarsChart.destroy();
+        const top = cats.slice(0, 8);
+        gastoBarsChart = new Chart(cB, {
+          type: 'bar',
+          data: { labels: top.map(c=>c.nombre), datasets: [{
+            label: 'Gasto RD$',
+            data: top.map(c=>c.total),
+            backgroundColor: top.map(c=>(c.color||'#5a6a80')+'bb'),
+            borderRadius: 4
+          }]},
+          options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v=>'$'+(v/1000).toFixed(0)+'K' } },
+              y: { grid: { display: false }, ticks: { color: tickColor, font } }
+            }
+          }
+        });
+      }
+
+      // Chart C: Barras apiladas Operativo vs Participación vs Resultado
+      const cC = document.getElementById('chartGastoTipo');
+      if (cC) {
+        if (gastoTipoChart) gastoTipoChart.destroy();
+        const opT   = cats._opTotal   || 0;
+        const parT  = cats._partGasto || 0;
+        const resN  = Math.max(dashStats.value.resultado, 0);
+        gastoTipoChart = new Chart(cC, {
+          type: 'bar',
+          data: {
+            labels: ['Período Actual'],
+            datasets: [
+              { label: 'Gastos Operativos', data: [opT],  backgroundColor: 'rgba(76,201,240,0.75)', borderRadius: 4 },
+              { label: 'Participación',      data: [parT], backgroundColor: 'rgba(255,209,102,0.75)', borderRadius: 4 },
+              { label: 'Resultado Neto',     data: [resN], backgroundColor: 'rgba(0,229,160,0.75)',   borderRadius: 4 },
+            ]
+          },
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: tickColor, font, padding: 14 } } },
+            scales: {
+              x: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font } },
+              y: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v=>'$'+(v/1000).toFixed(0)+'K' } }
+            }
+          }
+        });
+      }
     }
 
     // ══════════════════════════════════════════
@@ -3493,6 +4287,16 @@ createApp({
       const { data: cuadresData } = await sb.from('cuadres_grupo')
         .select('*, grupos(nombre), periodos(descripcion, fecha_inicio, fecha_fin)')
         .eq('periodo_id', selectedPeriodoId.value);
+
+      // Cargar gastos del período (para mostrar total_gastos real en resumen)
+      const { data: gastosResumen } = await sb.from('gastos')
+        .select('grupo_id, monto')
+        .eq('periodo_id', selectedPeriodoId.value);
+      // Suma de gastos por grupo
+      const gastosPorGrupo = {};
+      for (const g of (gastosResumen || [])) {
+        gastosPorGrupo[g.grupo_id] = (gastosPorGrupo[g.grupo_id] || 0) + (g.monto || 0);
+      }
 
       // Construir mapa: primero con datos vivos de ventas
       const periodoObj = periodos.value.find(p=>p.id===selectedPeriodoId.value);
@@ -3522,6 +4326,13 @@ createApp({
         groupMap[gid].total_premios += prem;
         groupMap[gid].total_comisiones += com;
         groupMap[gid].resultado_loteria += resNeto;
+      }
+
+      // Aplicar gastos reales a grupos que no tienen cuadre guardado aún
+      for (const gid of Object.keys(groupMap)) {
+        if (!groupMap[gid].cuadre_guardado) {
+          groupMap[gid].total_gastos = gastosPorGrupo[gid] || 0;
+        }
       }
 
       // Sobreescribir con cuadres guardados donde existan (datos más completos)
@@ -3707,18 +4518,16 @@ createApp({
         }
       }
 
-      // ── MOVIMIENTOS DE SEMANA (prestamos de esta banca específica) ──
-      // Filtra por banca_id para grupos individual_bancas — cada banca ve solo sus movimientos
-      let movQuery = sb.from('prestamos')
+      // ── MOVIMIENTOS DE SEMANA (prestamos del grupo en este período) ──
+      const { data: movSemana } = await sb.from('prestamos')
         .select('*')
         .eq('grupo_id', cuadreGrupoId.value)
-        .eq('periodo_id', cuadrePeriodoId.value);
-      if (cuadreBancaId.value) movQuery = movQuery.eq('banca_id', cuadreBancaId.value);
-      const { data: movSemana } = await movQuery.order('fecha').order('created_at');
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .order('fecha').order('created_at');
 
       const movSalidas  = (movSemana||[]).filter(p=>p.tipo==='salida').reduce((s,p)=>s+p.monto,0);
       const movEntradas = (movSemana||[]).filter(p=>p.tipo==='entrada').reduce((s,p)=>s+p.monto,0);
-      const movNeto = movSalidas - movEntradas; // positivo = dieron más de lo que recibieron
+      const movNeto = movSalidas - movEntradas;
 
       // ── CALCULAR POR BANCA ──
       const bancasCalc = bancasGrupo.map(b => {
@@ -3871,6 +4680,17 @@ createApp({
         resultado_neto_central: resNeto
       };
 
+      // ── MOVIMIENTOS DE SEMANA de esta banca específica ──
+      const { data: movSemana } = await sb.from('prestamos')
+        .select('*')
+        .eq('grupo_id', cuadreGrupoId.value)
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .order('fecha').order('created_at');
+      const movSalidas  = (movSemana||[]).filter(p=>p.tipo==='salida').reduce((s,p)=>s+p.monto,0);
+      const movEntradas = (movSemana||[]).filter(p=>p.tipo==='entrada').reduce((s,p)=>s+p.monto,0);
+      const movNeto = movSalidas - movEntradas;
+
       cuadreData.value = {
         grupo, periodo,
         banca,                        // la banca específica
@@ -3888,8 +4708,8 @@ createApp({
         arrastrePartManual.value = false;
         cuadreFrm.value = {
           balance_anterior:      cuadreExistente.balance_pendiente_anterior || 0,
-          entregado_supervisor:  cuadreExistente.entregado_supervisor || 0,
-          entregado_central:     cuadreExistente.entregado_central || 0,
+          entregado_supervisor:  movSalidas,  // siempre desde movimientos reales
+          entregado_central:     movEntradas, // siempre desde movimientos reales
           depositado:            cuadreExistente.depositado || 0,
           arrastre_participacion:cuadreExistente.arrastre_participacion || 0,
           participacion_pagada:  cuadreExistente.participacion_pagada || 0,
@@ -3945,7 +4765,7 @@ createApp({
         porcentaje_comision: banca?.porcentaje_comision || 0,
         resultado:        t.resultado,
         resultado_neto:   t.resultado_loteria,
-        total_gastos:     0,
+        total_gastos:     partCalc,
         resultado_loteria: t.resultado_periodo,
         resultado_periodo: t.resultado_periodo,
         // Campos de cuadre/balance (añadidos via ALTER)
@@ -3987,6 +4807,27 @@ createApp({
         arrastre_siguiente: arrSig
       }, { onConflict: 'grupo_id,banca_id,periodo_id' });
 
+      // ── REGISTRAR GASTO DE PARTICIPACIÓN EN TABLA GASTOS (banca individual) ──
+      await sb.from('gastos')
+        .delete()
+        .eq('grupo_id', cuadreGrupoId.value)
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .eq('tipo', 'participacion');
+      if (partCalc > 0) {
+        const catPart1 = categorias.value.find(c => c.tipo==='egreso' && c.nombre?.toLowerCase().includes('participac'));
+        await sb.from('gastos').insert({
+          grupo_id:     cuadreGrupoId.value,
+          banca_id:     cuadreBancaId.value,
+          periodo_id:   cuadrePeriodoId.value,
+          tipo:         'participacion',
+          categoria_id: catPart1?.id || null,
+          concepto:     `Participación ${pctPart}% — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto:        partCalc,
+          fecha:        new Date().toISOString().split('T')[0]
+        });
+      }
+
       // ── AUTO-REGISTRAR DEPÓSITO EN FLUJO DE EFECTIVO (banca individual) ──
       await sb.from('flujo_efectivo')
         .delete()
@@ -3995,6 +4836,7 @@ createApp({
         .eq('periodo_id', cuadrePeriodoId.value)
         .eq('origen', 'cuadre');
       if (f.depositado > 0) {
+        // Banca entrega dinero → ingreso en flujo
         const catIngreso = categorias.value.find(c=>c.nombre?.includes('Depósito Supervisor') || (c.tipo==='ingreso' && c.nombre?.toLowerCase().includes('cuadre')));
         await sb.from('flujo_efectivo').insert({
           fecha: new Date().toISOString().split('T')[0],
@@ -4002,6 +4844,27 @@ createApp({
           concepto: `Depósito cuadre — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
           monto: f.depositado,
           categoria_id: catIngreso?.id || null,
+          grupo_id: cuadreGrupoId.value,
+          banca_id: cuadreBancaId.value,
+          periodo_id: cuadrePeriodoId.value,
+          origen: 'cuadre'
+        });
+      } else if (f.depositado < 0) {
+        // Banca perdió → central entrega dinero → egreso en flujo
+        // Buscar categoría "Pago Cuadre Perdida", crearla si no existe
+        let catPerdida = categorias.value.find(c=>c.nombre === 'Pago Cuadre Perdida');
+        if (!catPerdida) {
+          const { data: newCat } = await sb.from('categorias').insert({
+            nombre: 'Pago Cuadre Perdida', tipo: 'egreso', color: '#ff4d6d', activo: true
+          }).select().single();
+          if (newCat) { categorias.value.push(newCat); catPerdida = newCat; }
+        }
+        await sb.from('flujo_efectivo').insert({
+          fecha: new Date().toISOString().split('T')[0],
+          tipo: 'egreso',
+          concepto: `Pago Cuadre Perdida — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto: Math.abs(f.depositado),
+          categoria_id: catPerdida?.id || null,
           grupo_id: cuadreGrupoId.value,
           banca_id: cuadreBancaId.value,
           periodo_id: cuadrePeriodoId.value,
@@ -4057,13 +4920,15 @@ createApp({
           .eq('periodo_id', cuadrePeriodoId.value)
           .eq('tipo', 'participacion');
         // Insertar el nuevo gasto de participación
+        const catPart2 = categorias.value.find(c => c.tipo==='egreso' && c.nombre?.toLowerCase().includes('participac'));
         await sb.from('gastos').insert({
-          grupo_id: cuadreGrupoId.value,
-          periodo_id: cuadrePeriodoId.value,
-          tipo: 'participacion',
-          concepto: `Participación ${cuadreData.value.grupo?.porcentaje_participacion || 0}% — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
-          monto: calcParticipacion.value,
-          fecha: new Date().toISOString().split('T')[0]
+          grupo_id:     cuadreGrupoId.value,
+          periodo_id:   cuadrePeriodoId.value,
+          tipo:         'participacion',
+          categoria_id: catPart2?.id || null,
+          concepto:     `Participación ${cuadreData.value.grupo?.porcentaje_participacion || 0}% — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto:        calcParticipacion.value,
+          fecha:        new Date().toISOString().split('T')[0]
         });
       }
 
@@ -4141,9 +5006,18 @@ createApp({
     const gastoFiltro = ref({ periodo_id: '', grupo_id: '' });
     const gastoFrm = ref({ periodo_id:'', grupo_id:'', banca_id:'', tipo:'operativo', concepto:'', monto:0, fecha: new Date().toISOString().split('T')[0], categoria_id:'' });
     const gastoEditId = ref(null);
-    function abrirNuevoGasto() {
+    function abrirNuevoGasto(preGrupoId='', prePeriodoId='') {
       gastoEditId.value = null;
-      gastoFrm.value = { periodo_id:'', grupo_id:'', banca_id:'', tipo:'operativo', concepto:'', monto:0, fecha: new Date().toISOString().split('T')[0], categoria_id:'' };
+      gastoFrm.value = {
+        periodo_id: prePeriodoId || '',
+        grupo_id:   preGrupoId   || '',
+        banca_id:   '',
+        tipo:       'operativo',
+        concepto:   '',
+        monto:      0,
+        fecha:      new Date().toISOString().split('T')[0],
+        categoria_id: ''
+      };
       showGastoModal.value = true;
     }
     function editarGasto(g) {
@@ -4281,6 +5155,46 @@ createApp({
       loadingPart.value = false;
     }
 
+    // Agrupa participación: una fila resumen por grupo+periodo, con bancas individuales como detalle
+    const participacionAgrupada = Vue.computed(() => {
+      const map = {};
+      for (const p of participacion.value) {
+        const key = (p.grupo_id || '') + '|' + (p.periodo_id || '');
+        const grupoModo = grupos.value.find(g=>g.id===p.grupo_id)?.modo || 'estandar';
+        if (grupoModo === 'individual_bancas') {
+          // Grupo Capital — siempre agrupar en una sola fila resumen
+          if (!map[key]) {
+            map[key] = {
+              _key: key, grupo_id: p.grupo_id, periodo_id: p.periodo_id,
+              grupos: p.grupos, periodos: p.periodos, bancas: null,
+              esGrupoAgrupado: true,
+              beneficio_semana: 0, arrastre_anterior: 0, balance_participacion: 0,
+              porcentaje: 0, monto_a_pagar: 0, pagado: 0, arrastre_siguiente: 0,
+              _bancas: []
+            };
+          }
+          map[key].beneficio_semana      += p.beneficio_semana || 0;
+          map[key].arrastre_anterior     += p.arrastre_anterior || 0;
+          map[key].balance_participacion += p.balance_participacion || 0;
+          map[key].monto_a_pagar         += p.monto_a_pagar || 0;
+          map[key].pagado                += p.pagado || 0;
+          map[key].arrastre_siguiente    += p.arrastre_siguiente || 0;
+          // Agregar al drilldown si tiene banca identificada
+          if (p.banca_id) map[key]._bancas.push(p);
+          // Guardar grupo_id para fallback de bancas desde bancas.value
+          map[key]._grupoId = p.grupo_id;
+        } else {
+          // Grupo estándar — mostrar directo sin agrupación
+          map[key] = { ...p, esGrupoAgrupado: false, _bancas: [] };
+        }
+      }
+      return Object.values(map).sort((a,b) => {
+        const na = a.grupos?.nombre || '';
+        const nb = b.grupos?.nombre || '';
+        return na.localeCompare(nb) || (b.periodo_id||'').localeCompare(a.periodo_id||'');
+      });
+    });
+
     // ══════════════════════════════════════════
     // CUENTA BANCO
     // ══════════════════════════════════════════
@@ -4340,68 +5254,132 @@ createApp({
     const importPeriodoId = ref('');
     const importPreview = ref([]);
     const importando = ref(false);
-    const manualVenta = ref({ periodo_id:'', banca_id:'', ventas:0, premios:0, avances:0, recargas:0, servicios:0 });
+    const importDuplicado = ref(false);
+    const importDuplicadoCount = ref(0);
+    const manualVenta = ref({ periodo_id:'', banca_id:'', ventas:0, premios:0 });
 
-    function handleCSV(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      Papa.parse(file, {
-        header: true, skipEmptyLines: true,
-        complete(results) {
-          // Mapear columnas del sistema exportado
-          importPreview.value = results.data.map(row => ({
-            grupo: row['Grupo'] || row['grupo'] || '',
-            agencia: row['Agencia'] || row['agencia'] || '',
-            usuario: row['Usuario'] || row['usuario'] || '',
-            loteria: parseFloat(row['Loteria'] || row['loteria'] || 0),
-            ventas: parseFloat((row['Ventas'] || row['ventas'] || '0').toString().replace(/[$,]/g, '')),
-            premios: parseFloat((row['Premios'] || row['premios'] || '0').toString().replace(/[$,]/g, '')),
-            avances: parseFloat((row['Avances'] || row['avances'] || '0').toString().replace(/[$,]/g, '')),
-            recargas: parseFloat((row['Recarga'] || row['recargas'] || '0').toString().replace(/[$,]/g, '')),
-            comision: parseFloat((row['Comision'] || row['comision'] || '0').toString().replace(/[$,]/g, '')),
-            beneficio: parseFloat((row['Beneficio / P'] || row['Beneficio'] || row['beneficio'] || '0').toString().replace(/[$,() ]/g, '').replace('','') || 0),
-          })).filter(r => r.ventas > 0);
-        }
-      });
+    // ── Detectar si el período ya tiene data ──
+    const importPeriodoTieneData = ref(false);
+    async function checkImportDuplicado() {
+      importDuplicado.value = false;
+      importPeriodoTieneData.value = false;
+      importDuplicadoCount.value = 0;
+      importPreview.value = [];
+      if (!sb || !importPeriodoId.value) return;
+      const { count } = await sb.from('ventas_semana')
+        .select('id', { count: 'exact', head: true })
+        .eq('periodo_id', importPeriodoId.value);
+      if (count > 0) {
+        importDuplicado.value = true;
+        importPeriodoTieneData.value = true;
+        importDuplicadoCount.value = count;
+      }
     }
 
+    // ── Borrar importación anterior ──
+    async function borrarImportacion() {
+      if (!sb || !importPeriodoId.value) return;
+      const periodo = periodos.value.find(p=>p.id===importPeriodoId.value);
+      const ok = await confirmDialog(
+        '¿Borrar datos de este período?',
+        `Se eliminarán TODOS los registros de ventas del período "${periodo?.descripcion||periodo?.fecha_inicio}". Esta acción no se puede deshacer.`,
+        '🗑️ Sí, borrar', 'warning'
+      );
+      if (!ok) return;
+      const { error } = await sb.from('ventas_semana').delete().eq('periodo_id', importPeriodoId.value);
+      if (error) { toast('Error al borrar: ' + error.message, 'error'); return; }
+      toast('Datos del período eliminados ✓', 'success');
+      importDuplicado.value = false;
+      importPeriodoTieneData.value = false;
+      importDuplicadoCount.value = 0;
+    }
+
+    // ── Parsear fila del Excel — solo Usuario, Ventas, Premios ──
+    function parseNum(v) {
+      if (v === null || v === undefined || v === '') return 0;
+      return parseFloat(String(v).replace(/[$,\s]/g,'').replace(/[()]/g,'').trim()) || 0;
+    }
+    function mapRow(row) {
+      const usuario = String(row['Usuario'] || row['usuario'] || '').trim();
+      const agencia = String(row['Agencia'] || row['agencia'] || '').trim();
+      const grupo   = String(row['Grupo']   || row['grupo']   || '').trim();
+      const ventas  = parseNum(row['Ventas']  || row['ventas']);
+      const premios = parseNum(row['Premios'] || row['premios']);
+      if (!usuario && !agencia) return null;
+      if (ventas === 0 && premios === 0) return null;
+      // Buscar banca: por usuario_sistema, luego por código, luego por nombre parcial
+      let banca = bancas.value.find(b => b.usuario_sistema && b.usuario_sistema === usuario);
+      if (!banca) banca = bancas.value.find(b => b.codigo === usuario);
+      if (!banca && agencia) banca = bancas.value.find(b =>
+        b.nombre.toLowerCase().replace(/\s+/g,'').includes(agencia.toLowerCase().replace(/\s+/g,'').substring(0,6))
+      );
+      return { usuario, agencia, grupo, ventas, premios, _banca: banca||null, _incluir: !!banca };
+    }
+
+    // ── Manejar archivo xlsx o csv ──
+    function handleFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (ext === 'xlsx' || ext === 'xls') {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const wb = XLSX.read(ev.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+          importPreview.value = rows.map(mapRow).filter(r => r !== null);
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        Papa.parse(file, {
+          header: true, skipEmptyLines: true,
+          complete(results) {
+            importPreview.value = results.data.map(mapRow).filter(r => r !== null);
+          }
+        });
+      }
+    }
+
+    // ── Confirmar e importar ──
     async function processImport() {
       if (!sb || !importPeriodoId.value || !importPreview.value.length) return;
+      const filas = importPreview.value.filter(r => r._banca && r._incluir);
+      if (!filas.length) { toast('No hay filas válidas para importar', 'error'); return; }
       importando.value = true;
       let ok = 0; let err = 0;
-      for (const row of importPreview.value) {
-        // Buscar banca por código (usuario o agencia)
-        let banca = bancas.value.find(b => b.usuario_sistema === row.usuario || b.codigo === row.usuario);
-        if (!banca) banca = bancas.value.find(b => b.nombre.toLowerCase().includes((row.agencia||'').toLowerCase().substring(0,6)));
-        if (!banca) { err++; continue; }
-        const grupo = grupos.value.find(g => g.id === banca.grupo_id);
+      for (const row of filas) {
         const { error } = await sb.from('ventas_semana').upsert({
-          banca_id: banca.id,
+          banca_id:   row._banca.id,
           periodo_id: importPeriodoId.value,
-          grupo_id: banca.grupo_id || null,
-          ventas: row.ventas,
-          premios: row.premios,
-          // avances ya no se guardan en ventas_semana → usar Movimientos de Semana
-          recargas: row.recargas,
+          grupo_id:   row._banca.grupo_id || null,
+          ventas:     row.ventas,
+          premios:    row.premios,
         }, { onConflict: 'banca_id,periodo_id' });
         if (error) err++;
         else ok++;
       }
       importando.value = false;
-      toast(`✅ Importados: ${ok} | ⚠️ No mapeados: ${err}`, ok > 0 ? 'success' : 'error');
-      importPreview.value = [];
+      const noMapeadas = importPreview.value.filter(r=>!r._banca).length;
+      toast(`✅ ${ok} bancas importadas${err?` | ⚠️ ${err} errores`:''}${noMapeadas?` | ℹ️ ${noMapeadas} sin mapear`:''}`, ok>0?'success':'error');
+      if (ok > 0) {
+        importPreview.value = [];
+        await checkImportDuplicado();
+      }
     }
 
     async function saveManualVenta() {
       if (!sb) return;
       const b = bancas.value.find(b=>b.id===manualVenta.value.banca_id);
       const { error } = await sb.from('ventas_semana').upsert({
-        ...manualVenta.value,
-        grupo_id: b?.grupo_id || null
+        banca_id:   manualVenta.value.banca_id,
+        periodo_id: manualVenta.value.periodo_id,
+        grupo_id:   b?.grupo_id || null,
+        ventas:     manualVenta.value.ventas,
+        premios:    manualVenta.value.premios,
       }, { onConflict: 'banca_id,periodo_id' });
       if (error) { toast('Error: ' + error.message, 'error'); return; }
       toast('Venta guardada', 'success');
-      manualVenta.value = { periodo_id:'', banca_id:'', ventas:0, premios:0, avances:0, recargas:0, servicios:0 };
+      manualVenta.value = { periodo_id:'', banca_id:'', ventas:0, premios:0 };
     }
 
     // ── MOVIMIENTO RÁPIDO DESDE CUADRE ──
@@ -4422,14 +5400,38 @@ createApp({
         toast('Ingresa un monto válido', 'error'); return;
       }
       const { error } = await sb.from('prestamos').insert({
-        grupo_id: cuadreGrupoId.value,
+        grupo_id:  cuadreGrupoId.value,
         periodo_id: cuadrePeriodoId.value,
-        tipo: movRapidoFrm.value.tipo,
-        monto: movRapidoFrm.value.monto,
-        concepto: movRapidoFrm.value.concepto,
-        fecha: movRapidoFrm.value.fecha
+        banca_id:  cuadreData.value.esBancaIndividual ? cuadreBancaId.value : null,
+        tipo:      movRapidoFrm.value.tipo,
+        monto:     movRapidoFrm.value.monto,
+        concepto:  movRapidoFrm.value.concepto,
+        fecha:     movRapidoFrm.value.fecha
       });
       if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+      // ── REGISTRAR EN FLUJO DE EFECTIVO ──
+      const esSalida = movRapidoFrm.value.tipo === 'salida';
+      const catFlujo = categorias.value.find(c =>
+        esSalida
+          ? (c.tipo==='egreso' && (c.nombre?.toLowerCase().includes('préstamo') || c.nombre?.toLowerCase().includes('avance')))
+          : (c.tipo==='ingreso' && c.nombre?.toLowerCase().includes('devolución'))
+      );
+      const bancaNom = cuadreData.value.esBancaIndividual
+        ? `${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — `
+        : '';
+      await sb.from('flujo_efectivo').insert({
+        fecha:        movRapidoFrm.value.fecha,
+        tipo:         esSalida ? 'egreso' : 'ingreso',
+        concepto:     `${esSalida ? 'Préstamo/Avance' : 'Devolución'} — ${bancaNom}${cuadreData.value.grupo?.nombre} — ${movRapidoFrm.value.concepto || ''}`,
+        monto:        movRapidoFrm.value.monto,
+        categoria_id: catFlujo?.id || null,
+        grupo_id:     cuadreGrupoId.value,
+        banca_id:     cuadreData.value.esBancaIndividual ? cuadreBancaId.value : null,
+        periodo_id:   cuadrePeriodoId.value,
+        origen:       'prestamo'
+      });
+
       toast('Movimiento registrado ✓', 'success');
       showMovRapido.value = false;
       // Recargar el cuadre para reflejar el nuevo movimiento
@@ -4996,7 +5998,7 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
       periodos, loadingPeriodos, selectedPeriodoId, activePeriodo, showPeriodoModal, editPeriodo, editarPeriodo, savePeriodo, deletePeriodo,
       grupos, loadingGrupos, showGrupoModal, editGrupo, editarGrupo, saveGrupo, deleteGrupo,
       bancas, loadingBancas, showBancaModal, editBanca, editarBanca, saveBanca, deleteBanca, bancaFiltroGrupo, bancasFiltradas,
-      dashStats, grupoCuadres, loadingDash, loadDashboard,
+      dashStats, dashKpis, dashGastosCat, dashGruposBancas, dashExpandido, grupoCuadres, loadingDash, loadDashboard, themeMode, isDark, toggleTheme, renderDashCharts,
       resumenData, loadingResumen, loadResumen, printResumen,
       resumenExpandido, toggleResumenDrilldown, partExpandido,
       cuadreGrupoId, cuadrePeriodoId, cuadreData, cuadreFrm, savingCuadre,
@@ -5004,9 +6006,9 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
       loadCuadre, saveCuadre, irACuadre,
       gastos, loadingGastos, showGastoModal, gastoFiltro, gastoFrm, gastoEditId, abrirNuevoGasto, editarGasto, loadGastos, saveGasto, deleteGasto, tipoGastoColor,
       prestamos, loadingPrest, showPrestamoModal, prestFiltro, prestFrm, prestamosResumen, prestEditId, abrirNuevoPrestamo, editarPrestamo, loadPrestamos, savePrestamo, deletePrestamo,
-      participacion, loadingPart, partFiltro, loadParticipacion,
+      participacion, participacionAgrupada, loadingPart, partFiltro, loadParticipacion,
       bancoMovs, loadingBanco, showBancoModal, bancoFiltro, bancoFrm, bancoStats, loadBanco, saveBanco, deleteBanco,
-      importPeriodoId, importPreview, importando, manualVenta, handleCSV, processImport, saveManualVenta,
+      importPeriodoId, importPreview, importando, importDuplicado, importDuplicadoCount, importPeriodoTieneData, manualVenta, handleFile, processImport, saveManualVenta, checkImportDuplicado, borrarImportacion,
       toasts, refreshAll,
       showReporte, printReport, copyWhatsapp,
       categorias, showCategoriaModal, editCategoria, editarCategoria, saveCategoria, deleteCategoria, categoriaTipo,
