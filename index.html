@@ -11,6 +11,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <style>
@@ -569,7 +571,14 @@ select.form-control option { background: var(--surface2); color: var(--text); }
 .report-highlight .lbl { color: #a07000; } .report-highlight .val { color: #a07000; font-weight: 700; }
 .report-pos { color: #00854a; } .report-neg { color: #cc0033; }
 .report-actions { display: flex; gap: 10px; padding: 12px 24px; border-top: 1px solid var(--border); background: var(--surface); }
+.export-group { display:flex; gap:6px; align-items:center; }
+.btn-export { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border-radius:7px; font-size:11px; font-weight:600; cursor:pointer; border:none; transition:all .15s; letter-spacing:.3px; }
+.btn-export.excel { background:rgba(0,180,80,.13); color:#00b450; border:1px solid rgba(0,180,80,.3); }
+.btn-export.excel:hover { background:rgba(0,180,80,.22); }
+.btn-export.pdf { background:rgba(220,60,60,.12); color:#dc3c3c; border:1px solid rgba(220,60,60,.28); }
+.btn-export.pdf:hover { background:rgba(220,60,60,.22); }
 @media print {
+  .export-group, .btn-export { display: none !important; }
   body > * { display: none !important; }
   .overlay { display: block !important; position: static !important; background: #fff !important; padding: 0 !important; z-index: 9999 !important; }
   .modal.report-modal { max-width: 100% !important; border: none !important; box-shadow: none !important; animation: none !important; }
@@ -1024,7 +1033,11 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                 {{ p.descripcion || p.fecha_inicio }}
               </option>
             </select>
-            <button class="btn btn-ghost btn-sm" @click="printResumen">🖨 Imprimir</button>
+            <div class="export-group">
+              <button class="btn btn-ghost btn-sm" @click="printResumen">🖨 Imprimir</button>
+              <button class="btn-export excel" @click="exportToExcel('tbl-resumen','resumen_semanal')">⬇ Excel</button>
+              <button class="btn-export pdf"   @click="exportToPDF('tbl-resumen','Resumen Semanal','resumen_semanal')">⬇ PDF</button>
+            </div>
           </div>
         </div>
 
@@ -1036,7 +1049,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
               <p>Sin datos — Ejecuta el cuadre primero</p>
             </div>
             <div class="table-wrap" v-else>
-              <table>
+              <table id="tbl-resumen">
                 <thead>
                   <tr>
                     <th>#</th><th>Grupo</th><th>Estado</th>
@@ -2046,7 +2059,11 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="section-title">Gastos</div>
             <div class="section-sub">Registro de gastos operativos y de central</div>
           </div>
-          <button class="btn btn-primary" @click="abrirNuevoGasto">+ Registrar Gasto</button>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-gastos','gastos')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-gastos','Gastos','gastos')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="abrirNuevoGasto">+ Registrar Gasto</button>
+          </div>
         </div>
 
         <div class="grid-2" style="margin-bottom:20px">
@@ -2072,7 +2089,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="empty" v-else-if="!gastos.length">
               <div class="empty-icon">💸</div><p>Sin gastos registrados</p>
             </div>
-            <table v-else>
+            <table v-else id="tbl-gastos">
               <thead><tr>
                 <th>Fecha</th><th>Grupo</th><th>Banca</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th></th>
               </tr></thead>
@@ -2109,7 +2126,11 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="section-title">Préstamos a Supervisores</div>
             <div class="section-sub">Control de entregas y devoluciones intra-semana</div>
           </div>
-          <button class="btn btn-primary" @click="abrirNuevoPrestamo">+ Registrar Movimiento</button>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-prestamos','prestamos')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-prestamos','Préstamos a Supervisores','prestamos')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="abrirNuevoPrestamo">+ Registrar Movimiento</button>
+          </div>
         </div>
 
         <!-- Explicación del flujo -->
@@ -2140,17 +2161,23 @@ select.form-control option { background: var(--surface2); color: var(--text); }
         <div class="card">
           <div class="card-header">
             <div class="card-title">Historial de Movimientos</div>
-            <select class="form-control" style="width:180px" v-model="prestFiltro.grupo_id" @change="loadPrestamos">
-              <option value="">Todos los grupos</option>
-              <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
-            </select>
+            <div style="display:flex;gap:8px">
+              <select class="form-control" style="width:180px" v-model="prestFiltro.periodo_id" @change="loadPrestamos">
+                <option value="">— Todos los períodos —</option>
+                <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+              </select>
+              <select class="form-control" style="width:160px" v-model="prestFiltro.grupo_id" @change="loadPrestamos">
+                <option value="">— Todos los grupos —</option>
+                <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+              </select>
+            </div>
           </div>
           <div class="card-body" style="padding:0">
             <div class="loading" v-if="loadingPrest"><div class="spinner"></div></div>
             <div class="empty" v-else-if="!prestamos.length">
               <div class="empty-icon">💰</div><p>Sin movimientos registrados</p>
             </div>
-            <table v-else>
+            <table v-else id="tbl-prestamos">
               <thead><tr><th>Fecha</th><th>Grupo</th><th>Banca</th><th>Período</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="p in prestamos" :key="p.id">
@@ -2265,6 +2292,8 @@ select.form-control option { background: var(--surface2); color: var(--text); }
               <option value="">— Todos los grupos —</option>
               <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
             </select>
+            <button class="btn-export excel" @click="exportToExcel('tbl-participacion','participacion')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-participacion','Participación de Beneficios','participacion')">⬇ PDF</button>
           </div>
         </div>
 
@@ -2274,7 +2303,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="empty" v-else-if="!participacion.length">
               <div class="empty-icon">📈</div><p>Sin registros — guarda cuadres primero</p>
             </div>
-            <table v-else>
+            <table v-else id="tbl-participacion">
               <thead><tr>
                 <th>Grupo</th><th>Período</th><th>Benef. Semana</th><th>Arrastre Ant.</th>
                 <th>Balance Part.</th><th>%</th><th>A Pagar</th><th>Pagado</th><th>Arrastre Sig.</th>
@@ -2333,7 +2362,11 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="section-title">Cuenta Bancaria</div>
             <div class="section-sub">Control de movimientos y saldo</div>
           </div>
-          <button class="btn btn-primary" @click="showBancoModal=true">+ Registrar Movimiento</button>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-banco','cuenta_bancaria')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-banco','Cuenta Bancaria','cuenta_bancaria')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="showBancoModal=true">+ Registrar Movimiento</button>
+          </div>
         </div>
 
         <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -2387,7 +2420,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="empty" v-else-if="!bancoMovs.length">
               <div class="empty-icon">🏦</div><p>Sin movimientos en el período</p>
             </div>
-            <table v-else>
+            <table v-else id="tbl-banco">
               <thead><tr>
                 <th>Fecha</th><th>Concepto</th><th>Grupo</th><th>Categoría</th>
                 <th>Referencia</th><th>Tipo</th><th>Monto</th><th>Saldo</th><th></th>
@@ -2397,14 +2430,17 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                   <td>{{ m.fecha }}</td>
                   <td>{{ m.concepto }}</td>
                   <td>{{ m.grupos?.nombre || '-' }}</td>
-                  <td><span class="tag tag-gray">{{ m.categoria || '-' }}</span></td>
+                  <td><span class="tag tag-gray">{{ m.categorias?.nombre || '-' }}</span></td>
                   <td>{{ m.referencia || '-' }}</td>
                   <td><span :class="m.tipo==='ingreso'?'tag tag-green':'tag tag-red'">{{ m.tipo }}</span></td>
                   <td :class="m.tipo==='ingreso'?'num-pos':'num-neg'">
                     {{ m.tipo==='ingreso'?'+':'-' }}{{ fmt(m.monto) }}
                   </td>
                   <td>{{ fmt(m.saldo_acumulado) }}</td>
-                  <td><button class="btn btn-danger btn-xs" @click="deleteBanco(m.id)">✕</button></td>
+                  <td style="white-space:nowrap">
+                    <button class="btn btn-ghost btn-xs" @click="editarBanco(m)" style="margin-right:4px">✏️</button>
+                    <button class="btn btn-danger btn-xs" @click="deleteBanco(m.id)">✕</button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -2416,7 +2452,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
     <div class="overlay" v-if="showBancoModal" @click.self="showBancoModal=false">
       <div class="modal">
         <div class="modal-header">
-          <div class="modal-title">🏦 Registrar Movimiento Bancario</div>
+          <div class="modal-title">{{ bancoEditId ? "✏️ Editar Movimiento Bancario" : "🏦 Registrar Movimiento Bancario" }}</div>
           <button class="close-btn" @click="showBancoModal=false">✕</button>
         </div>
         <div class="modal-body">
@@ -2478,9 +2514,9 @@ select.form-control option { background: var(--surface2); color: var(--text); }
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-ghost" @click="showBancoModal=false">Cancelar</button>
+          <button class="btn btn-ghost" @click="showBancoModal=false;bancoEditId=null">Cancelar</button>
           <button class="btn btn-primary" @click="saveBanco">
-            💾 Guardar
+            {{ bancoEditId ? '💾 Actualizar' : '💾 Guardar' }}
           </button>
         </div>
       </div>
@@ -2494,7 +2530,11 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="section-title">Grupos / Supervisores</div>
             <div class="section-sub">Administración de grupos de ventas</div>
           </div>
-          <button class="btn btn-primary" @click="showGrupoModal=true;editGrupo={}">+ Nuevo Grupo</button>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-grupos','grupos')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-grupos','Grupos / Supervisores','grupos')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="showGrupoModal=true;editGrupo={}">+ Nuevo Grupo</button>
+          </div>
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
@@ -2502,7 +2542,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="empty" v-else-if="!grupos.length">
               <div class="empty-icon">👥</div><p>Sin grupos registrados</p>
             </div>
-            <table v-else>
+            <table v-else id="tbl-grupos">
               <thead><tr><th>#</th><th>Código</th><th>Nombre</th><th>% Participación</th><th>Bancas</th><th>Estado</th><th>Acciones</th></tr></thead>
               <tbody>
                 <tr v-for="(g,i) in grupos" :key="g.id">
@@ -2612,6 +2652,8 @@ select.form-control option { background: var(--surface2); color: var(--text); }
               <option value="">Todos los grupos</option>
               <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
             </select>
+            <button class="btn-export excel" @click="exportToExcel('tbl-bancas','bancas')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-bancas','Bancas / Vendedores','bancas')">⬇ PDF</button>
             <button class="btn btn-primary" @click="showBancaModal=true;editBanca={}">+ Nueva Banca</button>
           </div>
         </div>
@@ -2621,7 +2663,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="empty" v-else-if="!bancasFiltradas.length">
               <div class="empty-icon">🏪</div><p>Sin bancas registradas</p>
             </div>
-            <table v-else>
+            <table v-else id="tbl-bancas">
               <thead><tr><th>Código</th><th>Nombre</th><th>Agencia</th><th>Grupo</th><th>% Comisión</th><th>Estado</th><th>Acciones</th></tr></thead>
               <tbody>
                 <tr v-for="b in bancasFiltradas" :key="b.id">
@@ -2714,7 +2756,11 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="section-title">Períodos Semanales</div>
             <div class="section-sub">Gestión de semanas de cuadre</div>
           </div>
-          <button class="btn btn-primary" @click="showPeriodoModal=true;editPeriodo={}">+ Nuevo Período</button>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-periodos','periodos')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-periodos','Períodos Semanales','periodos')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="showPeriodoModal=true;editPeriodo={}">+ Nuevo Período</button>
+          </div>
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
@@ -2722,7 +2768,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="empty" v-else-if="!periodos.length">
               <div class="empty-icon">📅</div><p>Sin períodos registrados</p>
             </div>
-            <table v-else>
+            <table v-else id="tbl-periodos">
               <thead><tr><th>Descripción</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th></tr></thead>
               <tbody>
                 <tr v-for="p in periodos" :key="p.id">
@@ -2979,7 +3025,11 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             <div class="section-title">🏷️ Categorías de Movimientos</div>
             <div class="section-sub">Define los tipos de ingresos y egresos del negocio</div>
           </div>
-          <button class="btn btn-primary" @click="editarCategoria({tipo:'egreso',activo:true,orden:0})">+ Nueva Categoría</button>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-cat-ing','categorias_ingreso');exportToExcel('tbl-cat-egr','categorias_egreso')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-cat-egr','Categorías','categorias')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="editarCategoria({tipo:'egreso',activo:true,orden:0})">+ Nueva Categoría</button>
+          </div>
         </div>
         <div class="grid-2">
           <!-- INGRESOS -->
@@ -2989,7 +3039,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
               <span class="tag tag-green">{{ categorias.filter(c=>c.tipo==='ingreso').length }}</span>
             </div>
             <div class="card-body" style="padding:0">
-              <table><thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
+              <table id="tbl-cat-ing"><thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
                 <tbody>
                   <tr v-for="c in categorias.filter(c=>c.tipo==='ingreso').sort((a,b)=>a.orden-b.orden)" :key="c.id">
                     <td>
@@ -3014,7 +3064,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
               <span class="tag tag-red">{{ categorias.filter(c=>c.tipo==='egreso').length }}</span>
             </div>
             <div class="card-body" style="padding:0">
-              <table><thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
+              <table id="tbl-cat-egr"><thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
                 <tbody>
                   <tr v-for="c in categorias.filter(c=>c.tipo==='egreso').sort((a,b)=>a.orden-b.orden)" :key="c.id">
                     <td>
@@ -3109,6 +3159,8 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             </select>
             <button class="btn btn-primary" @click="showFlujoModal=true">+ Registrar</button>
             <button class="btn btn-ghost" @click="loadFlujo">↺</button>
+            <button class="btn-export excel" @click="exportToExcel('tbl-flujo','flujo_efectivo')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-flujo','Flujo de Efectivo Real','flujo_efectivo')">⬇ PDF</button>
           </div>
         </div>
 
@@ -3170,7 +3222,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
             </div>
             <div class="card-body" style="padding:0">
               <div class="table-wrap">
-                <table>
+                <table id="tbl-flujo">
                   <thead>
                     <tr>
                       <th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Grupo</th>
@@ -3202,7 +3254,10 @@ select.form-control option { background: var(--surface2); color: var(--text); }
                         {{ m.tipo==='egreso' ? fmt(m.monto) : '' }}
                       </td>
                       <td style="text-align:right" :class="m.saldo_acumulado>=0?'num-pos':'num-neg'">{{ fmt(m.saldo_acumulado) }}</td>
-                      <td><button class="btn btn-danger btn-xs" @click="deleteFlujo(m.id)">✕</button></td>
+                      <td style="white-space:nowrap">
+                        <button class="btn btn-ghost btn-xs" @click="editarFlujo(m)" style="margin-right:4px">✏️</button>
+                        <button class="btn btn-danger btn-xs" @click="deleteFlujo(m.id)">✕</button>
+                      </td>
                     </tr>
                   </tbody>
                   <tfoot v-if="flujoMovs.length">
@@ -3262,7 +3317,7 @@ select.form-control option { background: var(--surface2); color: var(--text); }
         <div class="overlay" v-if="showFlujoModal" @click.self="showFlujoModal=false">
           <div class="modal">
             <div class="modal-header">
-              <div class="modal-title">Registrar Movimiento de Efectivo</div>
+              <div class="modal-title">{{ flujoEditId ? "✏️ Editar Movimiento" : "💵 Registrar Movimiento de Efectivo" }}</div>
               <button class="close-btn" @click="showFlujoModal=false">✕</button>
             </div>
             <div class="modal-body">
@@ -3326,8 +3381,8 @@ select.form-control option { background: var(--surface2); color: var(--text); }
               </div>
             </div>
             <div class="modal-footer">
-              <button class="btn btn-ghost" @click="showFlujoModal=false">Cancelar</button>
-              <button class="btn btn-primary" @click="saveFlujo">Guardar</button>
+              <button class="btn btn-ghost" @click="showFlujoModal=false;flujoEditId=null">Cancelar</button>
+              <button class="btn btn-primary" @click="saveFlujo">{{ flujoEditId ? 'Actualizar' : 'Guardar' }}</button>
             </div>
           </div>
         </div>
@@ -3350,7 +3405,8 @@ select.form-control option { background: var(--surface2); color: var(--text); }
               <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
             </select>
             <button class="btn btn-ghost" @click="loadEstadoResultados">↺ Actualizar</button>
-            <button class="btn btn-primary" @click="printER">🖨 Imprimir</button>
+            <button class="btn-export excel" @click="exportERExcel()">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="printER()">⬇ PDF / Imprimir</button>
           </div>
         </div>
 
@@ -5079,17 +5135,17 @@ createApp({
       } else if (f.depositado < 0) {
         // Banca perdió → central entrega dinero → egreso en flujo
         // Buscar categoría "Pago Cuadre Perdida", crearla si no existe
-        let catPerdida = categorias.value.find(c=>c.nombre === 'Pago Cuadre Perdida');
+        let catPerdida = categorias.value.find(c=>c.nombre === 'Perdida Cuadre');
         if (!catPerdida) {
           const { data: newCat } = await sb.from('categorias').insert({
-            nombre: 'Pago Cuadre Perdida', tipo: 'egreso', color: '#ff4d6d', activo: true
+            nombre: 'Perdida Cuadre', tipo: 'egreso', color: '#ff4d6d', activo: true
           }).select().single();
           if (newCat) { categorias.value.push(newCat); catPerdida = newCat; }
         }
         await sb.from('flujo_efectivo').insert({
           fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
           tipo: 'egreso',
-          concepto: `Pago Cuadre Perdida — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          concepto: `Perdida Cuadre — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
           monto: Math.abs(f.depositado),
           categoria_id: catPerdida?.id || null,
           grupo_id: cuadreGrupoId.value,
@@ -5201,6 +5257,25 @@ createApp({
           periodo_id: cuadrePeriodoId.value,
           origen: 'cuadre'
         });
+      } else if (f.depositado < 0) {
+        // Grupo cerró en pérdida — central entrega dinero al supervisor → egreso
+        let catPerdida = categorias.value.find(c => c.nombre === 'Perdida Cuadre');
+        if (!catPerdida) {
+          const { data: newCat } = await sb.from('categorias').insert({
+            nombre: 'Perdida Cuadre', tipo: 'egreso', color: '#ff4d6d', activo: true
+          }).select().single();
+          if (newCat) { categorias.value.push(newCat); catPerdida = newCat; }
+        }
+        await sb.from('flujo_efectivo').insert({
+          fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
+          tipo: 'egreso',
+          concepto: `Perdida Cuadre — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto: Math.abs(f.depositado),
+          categoria_id: catPerdida?.id || null,
+          grupo_id: cuadreGrupoId.value,
+          periodo_id: cuadrePeriodoId.value,
+          origen: 'cuadre'
+        });
       }
       // Si se entregaron avances mid-week (salidas), registrar en flujo como egreso
       if (cuadreData.value.movNeto > 0) {
@@ -5307,7 +5382,7 @@ createApp({
     const prestamos = ref([]);
     const loadingPrest = ref(false);
     const showPrestamoModal = ref(false);
-    const prestFiltro = ref({ grupo_id: '' });
+    const prestFiltro = ref({ grupo_id: '', periodo_id: '' });
     const prestFrm = ref({ grupo_id:'', banca_id:'', periodo_id:'', tipo:'salida', monto:0, concepto:'', fecha: new Date().toISOString().split('T')[0] });
     const prestEditId = ref(null);
     function abrirNuevoPrestamo() {
@@ -5339,7 +5414,8 @@ createApp({
       if (!sb) return;
       loadingPrest.value = true;
       let q = sb.from('prestamos').select('*, grupos(nombre), periodos(descripcion, fecha_inicio), bancas(codigo, nombre)').order('fecha', { ascending: false });
-      if (prestFiltro.value.grupo_id) q = q.eq('grupo_id', prestFiltro.value.grupo_id);
+      if (prestFiltro.value.grupo_id)  q = q.eq('grupo_id',  prestFiltro.value.grupo_id);
+      if (prestFiltro.value.periodo_id) q = q.eq('periodo_id', prestFiltro.value.periodo_id);
       const { data } = await q;
       prestamos.value = data || [];
       loadingPrest.value = false;
@@ -5433,6 +5509,7 @@ createApp({
     const bancoMovs = ref([]);
     const loadingBanco = ref(false);
     const showBancoModal = ref(false);
+    const bancoEditId    = ref(null);
     const bancoFiltro = ref({ desde: '', hasta: '', tipo: '', grupo_id: '' });
     const bancoFrm = ref({ fecha: new Date().toISOString().split('T')[0], tipo:'ingreso', concepto:'', monto:0, referencia:'', grupo_id:'', periodo_id:'', categoria_id:'' });
     const bancoStats = computed(() => ({
@@ -5444,7 +5521,7 @@ createApp({
     async function loadBanco() {
       if (!sb) return;
       loadingBanco.value = true;
-      let q = sb.from('cuenta_banco').select('*, grupos(nombre)').order('fecha').order('created_at');
+      let q = sb.from('cuenta_banco').select('*, grupos(nombre), categorias(nombre)').order('fecha').order('created_at');
       if (bancoFiltro.value.desde) q = q.gte('fecha', bancoFiltro.value.desde);
       if (bancoFiltro.value.hasta) q = q.lte('fecha', bancoFiltro.value.hasta);
       if (bancoFiltro.value.tipo) q = q.eq('tipo', bancoFiltro.value.tipo);
@@ -5458,6 +5535,20 @@ createApp({
       });
       loadingBanco.value = false;
     }
+    function editarBanco(m) {
+      bancoEditId.value = m.id;
+      bancoFrm.value = {
+        fecha:       m.fecha       || new Date().toISOString().split('T')[0],
+        tipo:        m.tipo        || 'ingreso',
+        concepto:    m.concepto    || '',
+        monto:       m.monto       || 0,
+        referencia:  m.referencia  || '',
+        grupo_id:    m.grupo_id    || '',
+        periodo_id:  m.periodo_id  || '',
+        categoria_id: m.categoria_id || ''
+      };
+      showBancoModal.value = true;
+    }
     async function saveBanco() {
       if (!sb) return;
       if (!bancoFrm.value.concepto || !bancoFrm.value.monto) {
@@ -5467,10 +5558,16 @@ createApp({
       if (!m.grupo_id) delete m.grupo_id;
       if (!m.periodo_id) delete m.periodo_id;
       if (!m.categoria_id) delete m.categoria_id;
-      const { error } = await sb.from('cuenta_banco').insert(m);
+      let error;
+      if (bancoEditId.value) {
+        ({ error } = await sb.from('cuenta_banco').update(m).eq('id', bancoEditId.value));
+      } else {
+        ({ error } = await sb.from('cuenta_banco').insert(m));
+      }
       if (error) { toast('Error: ' + error.message, 'error'); return; }
-      toast('Movimiento guardado', 'success');
+      toast(bancoEditId.value ? 'Movimiento actualizado ✓' : 'Movimiento guardado ✓', 'success');
       showBancoModal.value = false;
+      bancoEditId.value = null;
       bancoFrm.value = { fecha: new Date().toISOString().split('T')[0], tipo:'ingreso', concepto:'', monto:0, referencia:'', grupo_id:'', periodo_id:'', categoria_id:'' };
       loadBanco();
     }
@@ -5893,6 +5990,7 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
     const flujoMovs = ref([]);
     const loadingFlujo = ref(false);
     const showFlujoModal = ref(false);
+    const flujoEditId    = ref(null);
     const flujoFiltro = ref({ mes: '', tipo: '', periodo_id: '' });
     const flujoFrm = ref({
       fecha: new Date().toISOString().split('T')[0],
@@ -6009,16 +6107,38 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
       });
     }
 
+    function editarFlujo(m) {
+      flujoEditId.value = m.id;
+      flujoFrm.value = {
+        fecha:        m.fecha        || new Date().toISOString().split('T')[0],
+        tipo:         m.tipo         || 'ingreso',
+        concepto:     m.concepto     || '',
+        monto:        m.monto        || 0,
+        categoria_id: m.categoria_id || '',
+        grupo_id:     m.grupo_id     || '',
+        periodo_id:   m.periodo_id   || '',
+        referencia:   m.referencia   || '',
+        notas:        m.notas        || '',
+        origen:       m.origen       || 'manual'
+      };
+      showFlujoModal.value = true;
+    }
     async function saveFlujo() {
       if (!sb) return;
       const m = {...flujoFrm.value};
       if (!m.grupo_id) delete m.grupo_id;
       if (!m.periodo_id) delete m.periodo_id;
       if (!m.categoria_id) delete m.categoria_id;
-      const { error } = await sb.from('flujo_efectivo').insert(m);
+      let error;
+      if (flujoEditId.value) {
+        ({ error } = await sb.from('flujo_efectivo').update(m).eq('id', flujoEditId.value));
+      } else {
+        ({ error } = await sb.from('flujo_efectivo').insert(m));
+      }
       if (error) { toast('Error: ' + error.message, 'error'); return; }
-      toast('Movimiento registrado', 'success');
+      toast(flujoEditId.value ? 'Movimiento actualizado ✓' : 'Movimiento registrado ✓', 'success');
       showFlujoModal.value = false;
+      flujoEditId.value = null;
       flujoFrm.value = { fecha: new Date().toISOString().split('T')[0], tipo:'ingreso', concepto:'', monto:0, categoria_id:'', grupo_id:'', periodo_id:'', referencia:'', notas:'', origen:'manual' };
       loadFlujo();
     }
@@ -6186,6 +6306,89 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
       setTimeout(() => { w.print(); }, 500);
     }
 
+
+    // ══════════════════════════════════════════
+    // EXPORT: Excel y PDF — funciones reutilizables
+    // ══════════════════════════════════════════
+    function exportToExcel(tableId, filename) {
+      const el = document.getElementById(tableId);
+      if (!el) { toast('Tabla no disponible', 'error'); return; }
+      // Clonar para limpiar columnas de acciones (última th/td vacía o con botones)
+      const clone = el.cloneNode(true);
+      // Eliminar la última columna (acciones) si el header está vacío
+      clone.querySelectorAll('tr').forEach(row => {
+        const cells = row.querySelectorAll('th, td');
+        const last = cells[cells.length - 1];
+        if (last && (last.textContent.trim() === '' || last.querySelector('button'))) {
+          last.remove();
+        }
+      });
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.table_to_sheet(clone);
+      XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+      XLSX.writeFile(wb, filename + '.xlsx');
+    }
+
+    function exportToPDF(tableId, title, filename) {
+      const el = document.getElementById(tableId);
+      if (!el) { toast('Tabla no disponible', 'error'); return; }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      // Header del PDF
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('LottoAdmin', 14, 14);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(title, 14, 20);
+      doc.text('Generado: ' + new Date().toLocaleDateString('es-DO', { year:'numeric', month:'long', day:'numeric' }), 14, 26);
+      // Extraer headers y filas — omitir columna de botones
+      const headers = [];
+      const rows = [];
+      const ths = el.querySelectorAll('thead tr th');
+      ths.forEach((th, i) => {
+        if (th.textContent.trim() !== '' && !th.querySelector('button')) {
+          headers.push({ dataKey: i, header: th.textContent.trim() });
+        }
+      });
+      const validIdx = headers.map(h => h.dataKey);
+      el.querySelectorAll('tbody tr').forEach(tr => {
+        const tds = tr.querySelectorAll('td');
+        if (!tds.length) return;
+        const row = {};
+        validIdx.forEach(i => {
+          row[i] = tds[i] ? tds[i].textContent.trim() : '';
+        });
+        rows.push(row);
+      });
+      doc.autoTable({
+        startY: 32,
+        columns: headers,
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [17, 22, 32], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        bodyStyles: { fontSize: 7.5, textColor: [30, 30, 30] },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        margin: { left: 14, right: 14 },
+        styles: { overflow: 'linebreak', cellPadding: 2 },
+      });
+      doc.save(filename + '.pdf');
+    }
+
+    // Botones export para ER (Estado de Resultados — imprime el div completo)
+    function exportERExcel() {
+      const el = document.getElementById('erContent');
+      if (!el) { toast('Sin datos', 'error'); return; }
+      const tables = el.querySelectorAll('table');
+      if (!tables.length) { toast('Sin tablas en el reporte', 'error'); return; }
+      const wb = XLSX.utils.book_new();
+      tables.forEach((t, i) => {
+        const ws = XLSX.utils.table_to_sheet(t);
+        XLSX.utils.book_append_sheet(wb, ws, 'Tabla' + (i + 1));
+      });
+      XLSX.writeFile(wb, 'estado_resultados.xlsx');
+    }
+
     function hexToRgb(hex) {
       const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex||'#5a6a80');
       return r ? parseInt(r[1],16)+','+parseInt(r[2],16)+','+parseInt(r[3],16) : '90,106,128';
@@ -6232,7 +6435,7 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
       grupos, loadingGrupos, showGrupoModal, editGrupo, editarGrupo, saveGrupo, deleteGrupo,
       bancas, loadingBancas, showBancaModal, editBanca, editarBanca, saveBanca, deleteBanca, bancaFiltroGrupo, bancasFiltradas,
       dashStats, dashKpis, dashGastosCat, dashGruposBancas, dashExpandido, grupoCuadres, loadingDash, loadDashboard, themeMode, isDark, toggleTheme, renderDashCharts,
-      resumenData, loadingResumen, loadResumen, printResumen,
+      resumenData, loadingResumen, loadResumen, printResumen, exportToExcel, exportToPDF, exportERExcel,
       resumenExpandido, toggleResumenDrilldown, partExpandido,
       cuadreGrupoId, cuadrePeriodoId, cuadreData, cuadreFrm, savingCuadre,
       calcTotalDepositar, calcMontoEntregaSupervisor, calcBalanceFinal, calcBaseParticipacion, calcParticipacion,
@@ -6240,12 +6443,12 @@ ${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px
       gastos, loadingGastos, showGastoModal, gastoFiltro, gastoFrm, gastoEditId, abrirNuevoGasto, editarGasto, loadGastos, saveGasto, deleteGasto, tipoGastoColor,
       prestamos, loadingPrest, showPrestamoModal, prestFiltro, prestFrm, prestamosResumen, prestEditId, abrirNuevoPrestamo, editarPrestamo, loadPrestamos, savePrestamo, deletePrestamo,
       participacion, participacionAgrupada, loadingPart, partFiltro, loadParticipacion,
-      bancoMovs, loadingBanco, showBancoModal, bancoFiltro, bancoFrm, bancoStats, loadBanco, saveBanco, deleteBanco,
+      bancoMovs, loadingBanco, showBancoModal, bancoEditId, bancoFiltro, bancoFrm, bancoStats, loadBanco, saveBanco, deleteBanco, editarBanco,
       importPeriodoId, importPreview, importando, importDuplicado, importDuplicadoCount, importPeriodoTieneData, manualVenta, handleFile, processImport, saveManualVenta, checkImportDuplicado, borrarImportacion,
       toasts, refreshAll,
       showReporte, printReport, copyWhatsapp,
       categorias, showCategoriaModal, editCategoria, editarCategoria, saveCategoria, deleteCategoria, categoriaTipo,
-      flujoMovs, flujoMovsFiltrados, loadingFlujo, showFlujoModal, flujoFiltro, flujoFrm, flujoStats, flujoMeses, flujoXCategoria, loadFlujo, saveFlujo, deleteFlujo, hexToRgb,
+      flujoMovs, flujoMovsFiltrados, loadingFlujo, showFlujoModal, flujoEditId, flujoFiltro, flujoFrm, flujoStats, flujoMeses, flujoXCategoria, loadFlujo, saveFlujo, deleteFlujo, editarFlujo, hexToRgb,
       erData, loadingER, erFiltro, loadEstadoResultados, printER,
       showMovRapido, movRapidoFrm, abrirMovRapido, saveMovRapido,
       balanceAnteriorManual, arrastrePartManual,
