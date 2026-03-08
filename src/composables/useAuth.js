@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { getSb, currentUser, userPerfil, userPermisos, authReady, clearSession, toast } from '../store.js'
+import { getSb, currentUser, userPerfil, userPermisos, userPermsMap, authReady, clearSession, toast } from '../store.js'
 
 export function useAuth() {
 
@@ -65,13 +65,21 @@ export function useAuth() {
 
     const { data: permisos } = await sb
       .from('app_perfil_permisos')
-      .select('app_permisos(vista)')
+      .select('puede_ver, puede_editar, puede_eliminar, app_permisos(vista)')
       .eq('perfil_id', appUser.perfil_id)
       .eq('puede_ver', true)
 
-    userPermisos.value = new Set(
-      (permisos || []).map(p => p.app_permisos?.vista).filter(Boolean)
-    )
+    const map = {}
+    ;(permisos || []).forEach(p => {
+      const vista = p.app_permisos?.vista
+      if (vista) map[vista] = {
+        puede_ver:      p.puede_ver,
+        puede_editar:   p.puede_editar,
+        puede_eliminar: p.puede_eliminar
+      }
+    })
+    userPermsMap.value  = map
+    userPermisos.value  = new Set(Object.keys(map))
     authReady.value = true
     return true
   }

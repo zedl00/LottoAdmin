@@ -5,7 +5,7 @@ import {
   config, supabaseConfigured, initSupabase, getSb,
   periodos, selectedPeriodoId, activePeriodo,
   grupos, bancas, categorias,
-  currentUser, userPerfil, authReady, canView
+  currentUser, userPerfil, authReady, canView, canEdit, canDelete
 } from './store.js'
 
 import { useCategorias }        from './composables/useCategorias.js'
@@ -26,6 +26,27 @@ import { useAuth }               from './composables/useAuth.js'
 import { useCajaCentral }       from './composables/useCajaCentral.js'
 import { useCierre }            from './composables/useCierre.js'
 import { useUsuarios, VISTAS_SISTEMA } from './composables/useUsuarios.js'
+
+// ── Navegación con permisos ──
+function navigate(v, extraFn) {
+  if (!canView(v)) return
+  view.value = v
+  if (extraFn) extraFn()
+}
+
+// ── Guía de Uso — Secciones colapsables ──
+const docsSections = reactive([
+  { id:'flujo_semanal',   open:false, icon:'🔄', title:'Flujo Semanal de Operación',        sub:'Los 6 pasos que se repiten cada semana' },
+  { id:'formula_cuadre',  open:false, icon:'🧮', title:'Fórmula del Cuadre — Paso a Paso',   sub:'Cómo se calcula el P&L y el balance de efectivo' },
+  { id:'cierre_semanal',  open:false, icon:'📆', title:'Cierre Semanal — Cómo Funciona',      sub:'Proceso de cierre al final de cada semana' },
+  { id:'cierre_mensual',  open:false, icon:'📅', title:'Cierre Mensual — Cómo Funciona',      sub:'Consolidación de las semanas del mes en un solo cierre' },
+  { id:'seccion_vii',     open:false, icon:'💰', title:'Sección VII — ¿A Dónde Va el Dinero?', sub:'Trazabilidad completa del destino de cada peso generado' },
+  { id:'flujo_efectivo',  open:false, icon:'💵', title:'Flujo de Efectivo — Guía Detallada',  sub:'Cómo leer e interpretar el flujo para tomar decisiones' },
+  { id:'tablas',          open:false, icon:'🗄️', title:'Estructura de Tablas — Referencia Técnica', sub:'Descripción de cada tabla y sus campos principales' },
+  { id:'caja_central',    open:false, icon:'🏧', title:'Caja Central — Guía Completa',              sub:'Cómo funciona el fondo físico de oficina y cómo registrar cada movimiento' },
+  { id:'flujo_caja',      open:false, icon:'💸', title:'Flujo de Caja vs Contabilidad — La Diferencia Clave', sub:'Por qué el resultado contable y el efectivo real son distintos y cómo reconciliarlos' },
+])
+function docsExpandAll(val) { docsSections.forEach(s => s.open = val) }
 
 // ── Config helpers ──
 function saveConfig() {
@@ -78,10 +99,21 @@ const loginEmail = ref('')
 const loginPass  = ref('')
 const showPass   = ref(false)
 const exportOpen  = ref('')  // nombre de la vista con dropdown abierto
+// Redirige al primer módulo que el usuario tiene permiso de ver
+const VIEW_ORDER = ['dashboard','resumen','cuadre','importar','gastos','prestamos',
+  'caja_central','participacion','banco','flujo','cierre_periodo',
+  'estado_resultados','seccion_vii','grupos','bancas','periodos','categorias',
+  'usuarios','perfiles','config','docs']
+
+function redirectToFirstAllowed() {
+  const first = VIEW_ORDER.find(v => canView(v))
+  if (first) view.value = first
+}
+
 async function doLogin() {
   if (!loginEmail.value || !loginPass.value) return
   const ok = await login(loginEmail.value, loginPass.value)
-  if (ok) { loginEmail.value = ''; loginPass.value = '' }
+  if (ok) { loginEmail.value = ''; loginPass.value = ''; redirectToFirstAllowed() }
 }
 const { usuarios, perfiles, loadingUsers, savingUser, savingPerfil, showUserDrawer, showPerfilDrawer, editUserId, editPerfilId, userDrawerTab, userFrm, perfilFrm, perfilPermisos, loadUsuarios, loadPerfiles, abrirNuevoUsuario, abrirEditarUsuario, saveUsuario, toggleActivo, resetPassword, abrirNuevoPerfil, abrirEditarPerfil, savePerfil, deletePerfil, togglePermiso, toggleGrupo, selectAllPermisos } = useUsuarios()
 
@@ -303,7 +335,7 @@ onMounted(async () => {
   </div>
 
   <!-- ══ APP PRINCIPAL (solo si hay usuario autenticado) ══ -->
-  <div v-else id="app">
+  <div v-else class="app-layout">
 
       <aside class="sidebar">
     <div class="sidebar-logo">
@@ -311,72 +343,73 @@ onMounted(async () => {
       <h1>LottoAdmin</h1>
       <p>Sistema de cuadre</p>
     </div>
-    <div class="nav-section">Principal</div>
-    <div class="nav-item" :class="{active:view==='dashboard'}" @click="view='dashboard'">
+    <!-- ── Navegación con control de permisos ── -->
+    <div class="nav-section" v-if="canView('dashboard')||canView('resumen')">Principal</div>
+    <div v-if="canView('dashboard')" class="nav-item" :class="{active:view==='dashboard'}" @click="navigate('dashboard')">
       <span class="nav-icon">📊</span> Dashboard
     </div>
-    <div class="nav-item" :class="{active:view==='resumen'}" @click="view='resumen'">
+    <div v-if="canView('resumen')" class="nav-item" :class="{active:view==='resumen'}" @click="navigate('resumen')">
       <span class="nav-icon">📋</span> Resumen Semanal
     </div>
-    <div class="nav-section">Operaciones</div>
-    <div class="nav-item" :class="{active:view==='cuadre'}" @click="view='cuadre'">
+    <div class="nav-section" v-if="canView('cuadre')||canView('importar')||canView('gastos')||canView('prestamos')||canView('caja_central')">Operaciones</div>
+    <div v-if="canView('cuadre')" class="nav-item" :class="{active:view==='cuadre'}" @click="navigate('cuadre')">
       <span class="nav-icon">⚖️</span> Cuadre Semanal
     </div>
-    <div class="nav-item" :class="{active:view==='importar'}" @click="view='importar'">
+    <div v-if="canView('importar')" class="nav-item" :class="{active:view==='importar'}" @click="navigate('importar')">
       <span class="nav-icon">📥</span> Importar Ventas
     </div>
-    <div class="nav-item" :class="{active:view==='gastos'}" @click="view='gastos'">
+    <div v-if="canView('gastos')" class="nav-item" :class="{active:view==='gastos'}" @click="navigate('gastos')">
       <span class="nav-icon">💸</span> Gastos
     </div>
-    <div class="nav-item" :class="{active:view==='prestamos'}" @click="view='prestamos'">
+    <div v-if="canView('prestamos')" class="nav-item" :class="{active:view==='prestamos'}" @click="navigate('prestamos')">
       <span class="nav-icon">💰</span> Préstamos
     </div>
-    <div class="nav-section">Seguimiento</div>
-    <div class="nav-item" :class="{active:view==='participacion'}" @click="view='participacion'">
-      <span class="nav-icon">📈</span> Participación
-    </div>
-    <div class="nav-item" :class="{active:view==='banco'}" @click="view='banco'">
-      <span class="nav-icon">🏦</span> Cuenta Banco
-    </div>
-    <div class="nav-item" :class="{active:view==='flujo'}" @click="view='flujo'">
-      <span class="nav-icon">💵</span> Flujo de Efectivo
-    </div>
-    <div class="nav-item" :class="{active:view==='caja_central'}" @click="view='caja_central';loadCaja()">
+    <div v-if="canView('caja_central')" class="nav-item" :class="{active:view==='caja_central'}" @click="navigate('caja_central', loadCaja)">
       <span class="nav-icon">🏧</span> Caja Central
     </div>
-    <div class="nav-item" :class="{active:view==='cierre_periodo'}" @click="view='cierre_periodo'">
+    <div class="nav-section" v-if="canView('participacion')||canView('banco')||canView('flujo')||canView('cierre_periodo')||canView('estado_resultados')||canView('seccion_vii')">Seguimiento</div>
+    <div v-if="canView('participacion')" class="nav-item" :class="{active:view==='participacion'}" @click="navigate('participacion')">
+      <span class="nav-icon">📈</span> Participación
+    </div>
+    <div v-if="canView('banco')" class="nav-item" :class="{active:view==='banco'}" @click="navigate('banco')">
+      <span class="nav-icon">🏦</span> Cuenta Banco
+    </div>
+    <div v-if="canView('flujo')" class="nav-item" :class="{active:view==='flujo'}" @click="navigate('flujo')">
+      <span class="nav-icon">💵</span> Flujo de Efectivo
+    </div>
+    <div v-if="canView('cierre_periodo')" class="nav-item" :class="{active:view==='cierre_periodo'}" @click="navigate('cierre_periodo')">
       <span class="nav-icon">🔒</span> Cierre de Períodos
     </div>
-    <div class="nav-item" :class="{active:view==='estado_resultados'}" @click="view='estado_resultados'">
+    <div v-if="canView('estado_resultados')" class="nav-item" :class="{active:view==='estado_resultados'}" @click="navigate('estado_resultados')">
       <span class="nav-icon">📑</span> Estado de Resultados
     </div>
-    <div class="nav-item" :class="{active:view==='seccion_vii'}" @click="view='seccion_vii'">
+    <div v-if="canView('seccion_vii')" class="nav-item" :class="{active:view==='seccion_vii'}" @click="navigate('seccion_vii')">
       <span class="nav-icon">💰</span> ¿A Dónde Va el Dinero?
     </div>
-    <div class="nav-section">Configuración</div>
-    <div class="nav-item" :class="{active:view==='grupos'}" @click="view='grupos'">
+    <div class="nav-section" v-if="canView('grupos')||canView('bancas')||canView('periodos')||canView('categorias')||canView('config')||canView('docs')">Configuración</div>
+    <div v-if="canView('grupos')" class="nav-item" :class="{active:view==='grupos'}" @click="navigate('grupos')">
       <span class="nav-icon">👥</span> Grupos
     </div>
-    <div class="nav-item" :class="{active:view==='bancas'}" @click="view='bancas'">
+    <div v-if="canView('bancas')" class="nav-item" :class="{active:view==='bancas'}" @click="navigate('bancas')">
       <span class="nav-icon">🏪</span> Bancas
     </div>
-    <div class="nav-item" :class="{active:view==='periodos'}" @click="view='periodos'">
+    <div v-if="canView('periodos')" class="nav-item" :class="{active:view==='periodos'}" @click="navigate('periodos')">
       <span class="nav-icon">📅</span> Periodos
     </div>
-    <div class="nav-item" :class="{active:view==='categorias'}" @click="view='categorias'">
+    <div v-if="canView('categorias')" class="nav-item" :class="{active:view==='categorias'}" @click="navigate('categorias')">
       <span class="nav-icon">🏷️</span> Categorías
     </div>
-    <div class="nav-item" :class="{active:view==='config'}" @click="view='config'">
+    <div v-if="canView('config')" class="nav-item" :class="{active:view==='config'}" @click="navigate('config')">
       <span class="nav-icon">⚙️</span> Configuración
     </div>
-    <div class="nav-item" :class="{active:view==='docs'}" @click="view='docs'">
+    <div v-if="canView('docs')" class="nav-item" :class="{active:view==='docs'}" @click="navigate('docs')">
       <span class="nav-icon">📚</span> Guía de Uso
     </div>
-    <div class="nav-section">Administración</div>
-    <div class="nav-item" :class="{active:view==='usuarios'}" @click="view='usuarios'">
+    <div class="nav-section" v-if="canView('usuarios')||canView('perfiles')">Administración</div>
+    <div v-if="canView('usuarios')" class="nav-item" :class="{active:view==='usuarios'}" @click="navigate('usuarios')">
       <span class="nav-icon">👤</span> Usuarios
     </div>
-    <div class="nav-item" :class="{active:view==='perfiles'}" @click="view='perfiles'">
+    <div v-if="canView('perfiles')" class="nav-item" :class="{active:view==='perfiles'}" @click="navigate('perfiles')">
       <span class="nav-icon">🔐</span> Perfiles y Permisos
     </div>
     <div class="sidebar-bottom">
@@ -402,6 +435,16 @@ onMounted(async () => {
   </aside>
 
     <main class="main">
+      <!-- Pantalla de acceso denegado (seguridad adicional) -->
+      <div v-if="view && !canView(view) && view !== 'config'"
+           style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:16px;color:var(--muted)">
+        <div style="font-size:56px">🔒</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text)">Acceso restringido</div>
+        <div style="font-size:13px;max-width:320px;text-align:center;line-height:1.6">
+          No tienes permiso para ver este módulo.<br>Contacta al administrador del sistema.
+        </div>
+        <button class="btn btn-secondary" @click="redirectToFirstAllowed()">← Ir al inicio</button>
+      </div>
           <div class="topbar">
       <div class="topbar-left">
         <div class="topbar-title">{{ viewTitles[view] }}</div>
@@ -411,11 +454,10 @@ onMounted(async () => {
       </div>
       <div class="topbar-right">
         <button class="btn btn-ghost btn-sm" @click="refreshAll">🔄 Actualizar</button>
-        <button class="btn btn-primary btn-sm" @click="view='cuadre'">+ Nuevo Cuadre</button>
+        <button v-if="canView('cuadre')" class="btn btn-primary btn-sm" @click="navigate('cuadre')">+ Nuevo Cuadre</button>
       </div>
     </div>
-
-          <div class="content" @click="exportOpen=''">
+    <div class="content" @click="exportOpen=''">
 
       <!-- CONFIG ALERT (if not configured) -->
       <div v-if="!supabaseConfigured" class="config-box">
@@ -424,7 +466,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ DASHBOARD ══ -->
-      <div v-if="view==='dashboard'">
+      <div v-if="view==='dashboard' && canView('dashboard')">
         <div class="section-header">
           <div>
             <div class="section-title">Dashboard</div>
@@ -796,7 +838,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ RESUMEN SEMANAL ══ -->
-      <div v-if="view==='resumen'">
+      <div v-if="view==='resumen' && canView('resumen')">
         <div class="section-header">
           <div>
             <div class="section-title">Resumen Semanal</div>
@@ -949,7 +991,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ CUADRE SEMANAL ══ -->
-      <div v-if="view==='cuadre'">
+      <div v-if="view==='cuadre' && canView('cuadre')">
         <div class="section-header">
           <div>
             <div class="section-title">Cuadre Semanal</div>
@@ -1662,7 +1704,7 @@ onMounted(async () => {
     </div>
 
       <!-- ══ IMPORTAR VENTAS ══ -->
-      <div v-if="view==='importar'">
+      <div v-if="view==='importar' && canView('importar')">
         <div class="section-header">
           <div>
             <div class="section-title">Importar Ventas</div>
@@ -1851,7 +1893,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ GASTOS ══ -->
-      <div v-if="view==='gastos'">
+      <div v-if="view==='gastos' && canView('gastos')">
         <div class="section-header">
           <div>
             <div class="section-title">Gastos</div>
@@ -1871,7 +1913,7 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <button class="btn btn-primary" @click="abrirNuevoGasto">+ Registrar Gasto</button>
+            <button v-if="canEdit('gastos')" class="btn btn-primary" @click="abrirNuevoGasto">+ Registrar Gasto</button>
           </div>
         </div>
 
@@ -1916,7 +1958,7 @@ onMounted(async () => {
               <div style="width:10px;height:10px;border-radius:50%;flex-shrink:0" :style="'background:' + cat.color"></div>
               <div style="font-size:12px;min-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cat.nombre }}</div>
               <!-- Barra proporcional -->
-              <div style="flex:1;background:var(--bg-hover);border-radius:4px;height:8px;overflow:hidden">
+              <div style="flex:1;background:var(--surface2);border-radius:4px;height:8px;overflow:hidden">
                 <div :style="{
                   width: gastosTotalMonto > 0 ? ((cat.total / gastosTotalMonto) * 100).toFixed(1) + '%' : '0%',
                   background: cat.color,
@@ -1956,8 +1998,8 @@ onMounted(async () => {
                   </td>
                   <td class="num-neg">{{ fmt(g.monto) }}</td>
                   <td style="white-space:nowrap">
-                    <button class="btn btn-ghost btn-xs" @click="editarGasto(g)" style="margin-right:4px">✏️</button>
-                    <button class="btn btn-danger btn-xs" @click="deleteGasto(g.id)">✕</button>
+                    <button v-if="canEdit('gastos')" class="btn btn-ghost btn-xs" @click="editarGasto(g)" style="margin-right:4px">✏️</button>
+                    <button v-if="canDelete('gastos')" class="btn btn-danger btn-xs" @click="deleteGasto(g.id)">✕</button>
                   </td>
                 </tr>
               </tbody>
@@ -1982,7 +2024,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ PRÉSTAMOS ══ -->
-      <div v-if="view==='prestamos'">
+      <div v-if="view==='prestamos' && canView('prestamos')">
         <div class="section-header">
           <div>
             <div class="section-title">Préstamos a Supervisores</div>
@@ -2002,7 +2044,7 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <button class="btn btn-primary" @click="abrirNuevoPrestamo">+ Registrar Movimiento</button>
+            <button v-if="canEdit('prestamos')" class="btn btn-primary" @click="abrirNuevoPrestamo">+ Registrar Movimiento</button>
           </div>
         </div>
 
@@ -2150,7 +2192,7 @@ onMounted(async () => {
 
 
       <!-- ══ PARTICIPACIÓN ══ -->
-      <div v-if="view==='participacion'">
+      <div v-if="view==='participacion' && canView('participacion')">
         <div class="section-header">
           <div>
             <div class="section-title">Participación de Beneficios</div>
@@ -2246,7 +2288,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ CUENTA BANCO ══ -->
-      <div v-if="view==='banco'">
+      <div v-if="view==='banco' && canView('banco')">
         <div class="section-header">
           <div>
             <div class="section-title">Cuenta Bancaria</div>
@@ -2266,7 +2308,7 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <button class="btn btn-primary" @click="abrirNuevoBanco()">+ Registrar Movimiento</button>
+            <button v-if="canEdit('banco')" class="btn btn-primary" @click="abrirNuevoBanco()">+ Registrar Movimiento</button>
           </div>
         </div>
 
@@ -2359,8 +2401,8 @@ onMounted(async () => {
                   </td>
                   <td :class="m.saldo_acumulado>=0?'num-pos':'num-neg'">{{ fmt2(m.saldo_acumulado) }}</td>
                   <td style="white-space:nowrap">
-                    <button class="btn btn-ghost btn-xs" @click="editarBanco(m)" style="margin-right:4px">✏️</button>
-                    <button class="btn btn-danger btn-xs" @click="deleteBanco(m.id)">✕</button>
+                    <button v-if="canEdit('banco')" class="btn btn-ghost btn-xs" @click="editarBanco(m)" style="margin-right:4px">✏️</button>
+                    <button v-if="canDelete('banco')" class="btn btn-danger btn-xs" @click="deleteBanco(m.id)">✕</button>
                   </td>
                 </tr>
               </tbody>
@@ -2436,22 +2478,22 @@ onMounted(async () => {
         </div>
         <!-- Propagación cruzada — solo al crear -->
         <div v-if="!bancoEditId" style="padding:0 24px 16px;border-top:1px solid var(--border);margin-top:0">
-          <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;margin-top:12px;text-transform:uppercase;letter-spacing:0.5px">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;margin-top:12px;text-transform:uppercase;letter-spacing:0.5px">
             🔗 Registrar también en:
           </div>
           <div style="display:flex;flex-direction:column;gap:10px">
             <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="bancoPropagarGasto&&bancoFrm.tipo==='egreso'?'border-color:rgba(249,168,37,0.4);background:rgba(249,168,37,0.05)':''" >
               <input type="checkbox" v-model="bancoPropagarGasto" :disabled="bancoFrm.tipo==='ingreso'" style="margin-top:2px;width:16px;height:16px;accent-color:#f9a825;flex-shrink:0"/>
               <div>
-                <div style="font-weight:600;font-size:13px">🧾 Gastos <span v-if="bancoFrm.tipo==='ingreso'" style="font-weight:400;color:var(--text-muted);font-size:11px">(solo para egresos)</span></div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Mismo monto, concepto, fecha y categoría. Sin grupo ni período.</div>
+                <div style="font-weight:600;font-size:13px">🧾 Gastos <span v-if="bancoFrm.tipo==='ingreso'" style="font-weight:400;color:var(--muted);font-size:11px">(solo para egresos)</span></div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px">Mismo monto, concepto, fecha y categoría. Sin grupo ni período.</div>
               </div>
             </label>
             <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="bancoPropagarFlujo?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
               <input type="checkbox" v-model="bancoPropagarFlujo" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
               <div>
                 <div style="font-weight:600;font-size:13px">💸 Flujo de Efectivo</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Mismo tipo, monto, concepto, fecha y categoría.</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px">Mismo tipo, monto, concepto, fecha y categoría.</div>
               </div>
             </label>
           </div>
@@ -2467,7 +2509,7 @@ onMounted(async () => {
 
 
       <!-- ══ GRUPOS ══ -->
-      <div v-if="view==='grupos'">
+      <div v-if="view==='grupos' && canView('grupos')">
         <div class="section-header">
           <div>
             <div class="section-title">Grupos / Supervisores</div>
@@ -2487,7 +2529,7 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <button class="btn btn-primary" @click="showGrupoModal=true;editGrupo={}">+ Nuevo Grupo</button>
+            <button v-if="canEdit('grupos')" class="btn btn-primary" @click="showGrupoModal=true;editGrupo={}">+ Nuevo Grupo</button>
           </div>
         </div>
         <div class="card">
@@ -2595,7 +2637,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ BANCAS ══ -->
-      <div v-if="view==='bancas'">
+      <div v-if="view==='bancas' && canView('bancas')">
         <div class="section-header">
           <div>
             <div class="section-title">Bancas / Vendedores</div>
@@ -2619,7 +2661,7 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <button class="btn btn-primary" @click="showBancaModal=true;editBanca={}">+ Nueva Banca</button>
+            <button v-if="canEdit('bancas')" class="btn btn-primary" @click="showBancaModal=true;editBanca={}">+ Nueva Banca</button>
           </div>
         </div>
         <div class="card">
@@ -2715,7 +2757,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ PERIODOS ══ -->
-      <div v-if="view==='periodos'">
+      <div v-if="view==='periodos' && canView('periodos')">
         <div class="section-header">
           <div>
             <div class="section-title">Períodos Semanales</div>
@@ -2735,7 +2777,7 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <button class="btn btn-primary" @click="showPeriodoModal=true;editPeriodo={}">+ Nuevo Período</button>
+            <button v-if="canEdit('periodos')" class="btn btn-primary" @click="showPeriodoModal=true;editPeriodo={}">+ Nuevo Período</button>
           </div>
         </div>
         <div class="card">
@@ -2796,206 +2838,673 @@ onMounted(async () => {
       </div>
 
       <!-- ══ GUÍA DE USO / TABLAS ══ -->
-      <div v-if="view==='docs'">
+      <div v-if="view==='docs' && canView('docs')">
         <div class="section-header">
           <div>
-            <div class="section-title">📚 Guía de Uso y Estructura de Datos</div>
-            <div class="section-sub">Explicación de cada tabla y el flujo de información</div>
+            <div class="section-title">📚 Guía de Uso — LottoAdmin</div>
+            <div class="section-sub">Haz clic en cualquier sección para expandirla</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" @click="docsExpandAll(true)">Expandir todo</button>
+            <button class="btn btn-ghost btn-sm" @click="docsExpandAll(false)">Colapsar todo</button>
           </div>
         </div>
 
-        <!-- FLUJO GENERAL -->
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-header"><div class="card-title">🔄 Flujo Semanal de Operación</div></div>
-          <div class="card-body">
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;text-align:center">
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
-                <div style="font-size:24px;margin-bottom:6px">1️⃣</div>
-                <div style="font-size:11px;font-weight:700;color:var(--accent)">CREAR PERÍODO</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:4px">Lunes — crear semana lunes a domingo</div>
+        <!-- ─── SECCIÓN: Flujo Semanal ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[0].open=!docsSections[0].open" class="docs-hdr" :class="{open:docsSections[0].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">🔄</span>
+              <div><div class="docs-title">Flujo Semanal de Operación</div><div class="docs-sub">Los 6 pasos que se repiten cada semana</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[0].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[0].open" style="border-top:1px solid var(--border);padding:20px">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;text-align:center;margin-bottom:20px">
+                <div class="docs-step" style="--c:var(--accent)"><div style="font-size:22px">1️⃣</div><div class="docs-step-t">CREAR PERÍODO</div><div class="docs-step-d">Lunes — crear semana lunes a domingo</div></div>
+                <div class="docs-step" style="--c:var(--blue)"><div style="font-size:22px">2️⃣</div><div class="docs-step-t">IMPORTAR VENTAS</div><div class="docs-step-d">CSV del sistema o ingreso manual</div></div>
+                <div class="docs-step" style="--c:var(--yellow)"><div style="font-size:22px">3️⃣</div><div class="docs-step-t">REGISTRAR GASTOS</div><div class="docs-step-d">Operativos, internet, equipos, etc.</div></div>
+                <div class="docs-step" style="--c:var(--yellow)"><div style="font-size:22px">4️⃣</div><div class="docs-step-t">AVANCES MID-WEEK</div><div class="docs-step-d">Vienen del CSV como "Avances" — automático</div></div>
+                <div class="docs-step" style="--c:var(--accent)"><div style="font-size:22px">5️⃣</div><div class="docs-step-t">EJECUTAR CUADRE</div><div class="docs-step-d">Por grupo — calcular y guardar</div></div>
+                <div class="docs-step" style="--c:var(--blue)"><div style="font-size:22px">6️⃣</div><div class="docs-step-t">RESUMEN + REPORTE</div><div class="docs-step-d">Vista general + PDF/WhatsApp</div></div>
               </div>
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
-                <div style="font-size:24px;margin-bottom:6px">2️⃣</div>
-                <div style="font-size:11px;font-weight:700;color:var(--blue)">IMPORTAR VENTAS</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:4px">CSV del sistema o ingreso manual</div>
-              </div>
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
-                <div style="font-size:24px;margin-bottom:6px">3️⃣</div>
-                <div style="font-size:11px;font-weight:700;color:var(--yellow)">REGISTRAR GASTOS</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:4px">Operativos, internet, equipos, etc.</div>
-              </div>
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
-                <div style="font-size:24px;margin-bottom:6px">4️⃣</div>
-                <div style="font-size:11px;font-weight:700;color:var(--yellow)">AVANCES MID-WEEK</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:4px">Vienen del CSV como "Avances" — automático</div>
-              </div>
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
-                <div style="font-size:24px;margin-bottom:6px">5️⃣</div>
-                <div style="font-size:11px;font-weight:700;color:var(--accent)">EJECUTAR CUADRE</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:4px">Por grupo — calcular y guardar</div>
-              </div>
-              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
-                <div style="font-size:24px;margin-bottom:6px">6️⃣</div>
-                <div style="font-size:11px;font-weight:700;color:var(--blue)">RESUMEN + REPORTE</div>
-                <div style="font-size:10px;color:var(--muted);margin-top:4px">Vista general + PDF/WhatsApp</div>
+              <div class="docs-note docs-note-accent">
+                <strong>Nota importante:</strong> El período debe crearse <em>antes</em> de importar ventas. Si olvidas crear el período primero, deberás reasignar las ventas manualmente.
               </div>
             </div>
-          </div>
+          </transition>
         </div>
 
-        <!-- FÓRMULA DEL CUADRE -->
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-header"><div class="card-title">🧮 Fórmula del Cuadre — Paso a Paso</div></div>
-          <div class="card-body">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-              <div>
-                <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">P&L LOTERÍA (por banca)</div>
-                <div class="kv-row"><span class="kv-label">Ventas</span><span class="kv-value num-pos">= datos sistema</span></div>
-                <div class="kv-row"><span class="kv-label">(-) Premios</span><span class="kv-value num-neg">= datos sistema</span></div>
-                <div class="kv-row"><span class="kv-label">= Resultado Bruto</span><span class="kv-value">Ventas - Premios</span></div>
-                <div class="kv-row"><span class="kv-label">(-) Comisión vendedor</span><span class="kv-value num-neg">Ventas × % comisión</span></div>
-                <div class="kv-row"><span class="kv-label">= Resultado Lotería</span><span class="kv-value">Resultado - Comisión</span></div>
-                <div class="kv-row"><span class="kv-label">(-) Gastos Operativos</span><span class="kv-value num-neg">registros en Gastos</span></div>
-                <div class="kv-row" style="background:rgba(0,229,160,0.05);padding:6px"><span class="kv-label"><strong>= Resultado Período</strong></span><span class="kv-value num-pos"><strong>Total del grupo</strong></span></div>
-              </div>
-              <div>
-                <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">BALANCE DE EFECTIVO</div>
-                <div class="kv-row"><span class="kv-label">Balance Anterior</span><span class="kv-value">del cuadre previo</span></div>
-                <div class="kv-row"><span class="kv-label">(+) Resultado Período</span><span class="kv-value">calculado arriba</span></div>
-                <div class="kv-row"><span class="kv-label">= Total Acumulado</span><span class="kv-value">suma de ambos</span></div>
-                <div class="kv-row"><span class="kv-label">(+) Avances entregados</span><span class="kv-value" style="color:var(--blue)">del CSV (préstamos)</span></div>
-                <div class="kv-row"><span class="kv-label">(+) Otros préstamos</span><span class="kv-value">entrada manual</span></div>
-                <div class="kv-row"><span class="kv-label">(-) Pagos ya recibidos</span><span class="kv-value">antes del cuadre</span></div>
-                <div class="kv-row"><span class="kv-label">= Total a Depositar</span><span class="kv-value">lo que deben</span></div>
-                <div class="kv-row"><span class="kv-label">(-) Gasto Participación</span><span class="kv-value" style="color:var(--yellow)">retiene supervisor</span></div>
-                <div class="kv-row" style="background:rgba(0,229,160,0.05);padding:6px"><span class="kv-label"><strong>= Entrega al Central</strong></span><span class="kv-value num-pos"><strong>lo que depositan</strong></span></div>
-                <div class="kv-row"><span class="kv-label">(-) Depositado real</span><span class="kv-value">lo que entregaron</span></div>
-                <div class="kv-row" style="background:rgba(255,77,109,0.05);padding:6px"><span class="kv-label"><strong>= Balance Final</strong></span><span class="kv-value num-neg"><strong>→ próximo cuadre</strong></span></div>
+        <!-- ─── SECCIÓN: Fórmula del Cuadre ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[1].open=!docsSections[1].open" class="docs-hdr" :class="{open:docsSections[1].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">🧮</span>
+              <div><div class="docs-title">Fórmula del Cuadre — Paso a Paso</div><div class="docs-sub">Cómo se calcula el P&L y el balance de efectivo</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[1].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[1].open" style="border-top:1px solid var(--border);padding:20px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                <div>
+                  <div class="docs-col-label">P&L LOTERÍA (por banca)</div>
+                  <div class="kv-row"><span class="kv-label">Ventas</span><span class="kv-value">= datos sistema</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Premios</span><span class="kv-value num-neg">= datos sistema</span></div>
+                  <div class="kv-row"><span class="kv-label">= Resultado Bruto</span><span class="kv-value">Ventas - Premios</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Comisión vendedor</span><span class="kv-value num-neg">Ventas × % comisión</span></div>
+                  <div class="kv-row"><span class="kv-label">= Resultado Lotería</span><span class="kv-value">Resultado - Comisión</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Gastos Operativos</span><span class="kv-value num-neg">registros en Gastos</span></div>
+                  <div class="kv-row" style="background:rgba(0,229,160,0.05);padding:6px"><span class="kv-label"><strong>= Resultado Período ✅</strong></span><span class="kv-value num-pos"><strong>Total del grupo</strong></span></div>
+                </div>
+                <div>
+                  <div class="docs-col-label">BALANCE DE EFECTIVO</div>
+                  <div class="kv-row"><span class="kv-label">Balance Anterior</span><span class="kv-value">del cuadre previo</span></div>
+                  <div class="kv-row"><span class="kv-label">(+) Resultado Período</span><span class="kv-value">calculado arriba</span></div>
+                  <div class="kv-row"><span class="kv-label">= Total Acumulado</span><span class="kv-value">suma de ambos</span></div>
+                  <div class="kv-row"><span class="kv-label">(+) Avances entregados</span><span class="kv-value" style="color:var(--blue)">del CSV (préstamos)</span></div>
+                  <div class="kv-row"><span class="kv-label">(+) Otros préstamos</span><span class="kv-value">entrada manual</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Pagos recibidos</span><span class="kv-value num-neg">antes del cuadre</span></div>
+                  <div class="kv-row"><span class="kv-label">= Total a Depositar</span><span class="kv-value">lo que deben</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Gasto Participación</span><span class="kv-value" style="color:var(--yellow)">retiene supervisor</span></div>
+                  <div class="kv-row" style="background:rgba(0,229,160,0.05);padding:6px"><span class="kv-label"><strong>= Entrega al Central ✅</strong></span><span class="kv-value num-pos"><strong>lo que depositan</strong></span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Depositado real</span><span class="kv-value">lo que entregaron</span></div>
+                  <div class="kv-row" style="background:rgba(255,77,109,0.05);padding:6px"><span class="kv-label"><strong>= Balance Final →</strong></span><span class="kv-value num-neg"><strong>próximo cuadre</strong></span></div>
+                </div>
               </div>
             </div>
-          </div>
+          </transition>
         </div>
 
-        <!-- TABLAS -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="card">
-            <div class="card-header"><div class="card-title">📋 grupos</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">Supervisores o grupos de ventas. Cada grupo agrupa varias bancas.</p>
-              <div class="kv-row"><span class="kv-label">nombre, codigo</span><span class="kv-value">identificación</span></div>
-              <div class="kv-row"><span class="kv-label">porcentaje_participacion</span><span class="kv-value" style="color:var(--yellow)">% de ganancias que retiene el supervisor</span></div>
-              <div class="kv-row"><span class="kv-label">activo</span><span class="kv-value">si aparece en cuadres</span></div>
-              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                📝 <strong>Qué registrar primero:</strong> Crea todos los grupos/supervisores antes de crear bancas.
+        <!-- ─── SECCIÓN: Cierre Semanal ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[2].open=!docsSections[2].open" class="docs-hdr" :class="{open:docsSections[2].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">📆</span>
+              <div><div class="docs-title">Cierre Semanal — Cómo Funciona</div><div class="docs-sub">Proceso de cierre al final de cada semana</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[2].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[2].open" style="border-top:1px solid var(--border);padding:20px">
+              <p class="docs-intro">El <strong>Cierre Semanal</strong> congela los números de la semana, valida que el saldo bancario concuerde con lo calculado, y deja el sistema listo para la siguiente semana.</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                <div class="docs-box docs-box-green">
+                  <div class="docs-box-title" style="color:var(--accent)">📋 Pasos del Cierre Semanal</div>
+                  <ol style="font-size:12px;line-height:2.1;padding-left:18px;margin:0">
+                    <li>Asegúrate de que <strong>todos los cuadres de grupo</strong> estén guardados</li>
+                    <li>Verifica que todos los <strong>gastos</strong> de la semana estén registrados</li>
+                    <li>Confirma los <strong>depósitos recibidos</strong> en la cuenta banco</li>
+                    <li>Ve a <strong>Cierre de Períodos</strong> y selecciona la semana</li>
+                    <li>Ingresa el <strong>saldo real del banco</strong> en ese momento</li>
+                    <li>El sistema compara saldo calculado vs saldo real</li>
+                    <li>Si cuadra → <strong>Ejecutar Cierre</strong>. Si no → revisar descuadres</li>
+                  </ol>
+                </div>
+                <div class="docs-box docs-box-blue">
+                  <div class="docs-box-title" style="color:var(--blue)">🔍 Qué Valida el Cierre</div>
+                  <div class="kv-row"><span class="kv-label">Saldo banco calculado</span><span class="kv-value">Suma de todos los depósitos registrados</span></div>
+                  <div class="kv-row"><span class="kv-label">Saldo banco real</span><span class="kv-value">Lo que muestra el banco al momento</span></div>
+                  <div class="kv-row"><span class="kv-label">Diferencia</span><span class="kv-value" style="color:var(--accent);font-weight:700">Debe ser = 0 para cuadrar</span></div>
+                  <div class="kv-row"><span class="kv-label">Estado período</span><span class="kv-value">Pasa a "cerrado" — solo lectura</span></div>
+                </div>
+              </div>
+              <div class="docs-box docs-box-red" style="margin-bottom:16px">
+                <div class="docs-box-title" style="color:var(--red)">🚨 Cuando Hay Descuadre — Partidas a Revisar</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px">
+                  <div>
+                    <div style="font-weight:700;color:var(--yellow);margin-bottom:6px">Primero verifica:</div>
+                    <ul style="padding-left:16px;line-height:2;margin:0">
+                      <li>¿Falta algún <strong>depósito</strong> por registrar en Banco?</li>
+                      <li>¿Algún cuadre tiene el <strong>depositado real</strong> incorrecto?</li>
+                      <li>¿Hay un gasto pagado con efectivo sin registrar?</li>
+                      <li>¿Los <strong>avances del CSV</strong> cuadran con los préstamos?</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div style="font-weight:700;color:var(--yellow);margin-bottom:6px">Luego revisa por módulo:</div>
+                    <ul style="padding-left:16px;line-height:2;margin:0">
+                      <li><strong>Flujo de Efectivo</strong> → identifica semana con diferencia</li>
+                      <li><strong>Cuenta Banco</strong> → filtra por período, revisa movimientos</li>
+                      <li><strong>Resumen Semanal</strong> → compara grupo a grupo</li>
+                      <li><strong>Sección VII</strong> → ver destino del dinero con detalle</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="docs-note docs-note-surface">
+                <div style="font-weight:700;margin-bottom:8px">💡 Proceso de Auditoría Rápida — 5 pasos</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px">
+                  <div class="docs-pill">1. Resumen Semanal → total depósitos esperados por grupo</div>
+                  <div class="docs-pill">2. Cuenta Banco → sumar depósitos reales de esa semana</div>
+                  <div class="docs-pill">3. Diferencia = descuadre por localizar</div>
+                  <div class="docs-pill">4. Flujo de Efectivo → buscar la partida que falta</div>
+                  <div class="docs-pill">5. Si cuadra en papel → verificar en el banco real</div>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">🏪 bancas</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">Vendedores, agencias o verifones. Pertenecen a un grupo.</p>
-              <div class="kv-row"><span class="kv-label">codigo, nombre, agencia</span><span class="kv-value">identificación</span></div>
-              <div class="kv-row"><span class="kv-label">usuario_sistema</span><span class="kv-value" style="color:var(--accent)">⚠️ CLAVE para mapeo CSV</span></div>
-              <div class="kv-row"><span class="kv-label">porcentaje_comision</span><span class="kv-value">% sobre ventas que gana el vendedor</span></div>
-              <div class="kv-row"><span class="kv-label">grupo_id</span><span class="kv-value">a qué grupo pertenece</span></div>
-              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                📝 <strong>Importante:</strong> El campo <code>usuario_sistema</code> debe coincidir con la columna <code>Usuario</code> del CSV exportado.
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">📅 periodos</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">Una semana de cuadre (lunes a domingo). Todo se filtra por período.</p>
-              <div class="kv-row"><span class="kv-label">fecha_inicio, fecha_fin</span><span class="kv-value">rango de la semana</span></div>
-              <div class="kv-row"><span class="kv-label">descripcion</span><span class="kv-value">ej: "Semana 16 al 22 Febrero"</span></div>
-              <div class="kv-row"><span class="kv-label">cerrado</span><span class="kv-value">marca semana como finalizada</span></div>
-              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                📝 <strong>Cuándo crear:</strong> Cada lunes, crea el nuevo período antes de importar ventas.
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">💰 ventas_semana</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">Datos del sistema de gestión: ventas, premios y avances por banca/semana.</p>
-              <div class="kv-row"><span class="kv-label">ventas, premios</span><span class="kv-value">datos del sistema de lotería</span></div>
-              <div class="kv-row"><span class="kv-label" style="color:var(--blue)">avances</span><span class="kv-value" style="color:var(--blue)">préstamos entregados mid-week (se recuperan en cuadre)</span></div>
-              <div class="kv-row"><span class="kv-label">recargas, servicios</span><span class="kv-value">otros ingresos del sistema</span></div>
-              <div class="alert alert-success" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                📥 <strong>Cómo se llena:</strong> Via importación CSV o ingreso manual. Una vez cargado, el Dashboard y Resumen se actualizan en tiempo real.
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">💸 gastos</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">Gastos operativos por banca o grupo. Se descuentan del resultado.</p>
-              <div class="kv-row"><span class="kv-label">operativo</span><span class="kv-value">internet, materiales, etc.</span></div>
-              <div class="kv-row"><span class="kv-label">central</span><span class="kv-value">gastos que paga la central</span></div>
-              <div class="kv-row"><span class="kv-label" style="color:var(--yellow)">participacion</span><span class="kv-value" style="color:var(--yellow)">se crea automáticamente al guardar cuadre</span></div>
-              <div class="kv-row"><span class="kv-label">sistema, equipo, otro</span><span class="kv-value">otros tipos</span></div>
-              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                📝 <strong>Cuándo registrar:</strong> Antes de ejecutar el cuadre. Si hay un gasto de internet de una banca específica, asignarlo a esa banca.
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">⚖️ cuadres_grupo</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">El resultado final del cuadre semanal por grupo. Se crea al hacer clic en "Guardar Cuadre".</p>
-              <div class="kv-row"><span class="kv-label">resultado_loteria</span><span class="kv-value">resultado total del grupo</span></div>
-              <div class="kv-row"><span class="kv-label">balance_pendiente_anterior</span><span class="kv-value">del cuadre previo</span></div>
-              <div class="kv-row"><span class="kv-label">total_a_depositar</span><span class="kv-value">lo que debe dar el supervisor</span></div>
-              <div class="kv-row"><span class="kv-label">balance_final</span><span class="kv-value">→ se usa como balance_anterior del próximo cuadre</span></div>
-              <div class="alert alert-success" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                ✅ <strong>Flujo:</strong> balance_final de esta semana → balance_anterior de la próxima semana (ingresar manualmente).
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">💰 prestamos</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">Préstamos/avances adicionales manuales durante la semana que no vienen del CSV.</p>
-              <div class="kv-row"><span class="kv-label">tipo: salida</span><span class="kv-value">dinero entregado al supervisor</span></div>
-              <div class="kv-row"><span class="kv-label">tipo: entrada</span><span class="kv-value">devolución del supervisor</span></div>
-              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                📝 <strong>Diferencia con avances:</strong> Los <em>avances</em> del CSV son automáticos (por banca). Los <em>préstamos</em> aquí son movimientos manuales por grupo durante la semana.
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">📈 participacion_acumulada</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">Seguimiento del arrastre de participación de beneficios por grupo.</p>
-              <div class="kv-row"><span class="kv-label">beneficio_semana</span><span class="kv-value">resultado del período</span></div>
-              <div class="kv-row"><span class="kv-label">arrastre_anterior</span><span class="kv-value">balance negativo de semanas previas</span></div>
-              <div class="kv-row"><span class="kv-label">monto_a_pagar</span><span class="kv-value">solo si balance > 0</span></div>
-              <div class="kv-row"><span class="kv-label">arrastre_siguiente</span><span class="kv-value">→ usarlo como arrastre del próximo cuadre</span></div>
-              <div class="alert alert-success" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                ✅ <strong>Se actualiza automáticamente</strong> al guardar el cuadre. El campo "Arrastre Anterior Participación" en el cuadre = arrastre_siguiente del período anterior.
-              </div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">🏦 cuenta_banco</div></div>
-            <div class="card-body" style="font-size:12px">
-              <p style="color:var(--muted);margin-bottom:10px">Registro de todos los movimientos de la cuenta bancaria de la central.</p>
-              <div class="kv-row"><span class="kv-label">tipo: ingreso</span><span class="kv-value">dinero recibido (de supervisores, etc.)</span></div>
-              <div class="kv-row"><span class="kv-label">tipo: egreso</span><span class="kv-value">dinero salido (gastos, préstamos, etc.)</span></div>
-              <div class="kv-row"><span class="kv-label">saldo_acumulado</span><span class="kv-value">calculado automáticamente al cargar</span></div>
-              <div class="kv-row"><span class="kv-label">categoria</span><span class="kv-value">cuadre, gasto_operativo, nomina, participacion, otro</span></div>
-              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
-                📝 <strong>Cuándo registrar:</strong> Cada vez que haya un movimiento real en la cuenta bancaria. Registrar los depósitos que hacen los supervisores aquí.
-              </div>
-            </div>
-          </div>
+          </transition>
         </div>
+
+        <!-- ─── SECCIÓN: Cierre Mensual ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[3].open=!docsSections[3].open" class="docs-hdr" :class="{open:docsSections[3].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">📅</span>
+              <div><div class="docs-title">Cierre Mensual — Cómo Funciona</div><div class="docs-sub">Consolidación de todas las semanas del mes</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[3].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[3].open" style="border-top:1px solid var(--border);padding:20px">
+              <p class="docs-intro">El <strong>Cierre Mensual</strong> agrupa todos los cierres semanales para producir un estado financiero consolidado. Es la base del <em>Estado de Resultados</em> y la <em>Sección VII</em>. Debe hacerse <em>después</em> de cerrar todas las semanas del mes.</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                <div class="docs-box docs-box-green">
+                  <div class="docs-box-title" style="color:var(--accent)">📋 Pasos del Cierre Mensual</div>
+                  <ol style="font-size:12px;line-height:2.1;padding-left:18px;margin:0">
+                    <li>Confirma que <strong>todas las semanas del mes estén cerradas</strong></li>
+                    <li>Ve a <strong>Cierre de Períodos → tab Mensual</strong></li>
+                    <li>Selecciona el mes a cerrar</li>
+                    <li>El sistema suma ventas, premios, gastos de todas las semanas</li>
+                    <li>Ingresa el <strong>saldo bancario real al último día del mes</strong></li>
+                    <li>Revisa el resumen consolidado</li>
+                    <li>Ejecutar Cierre Mensual → el mes queda bloqueado</li>
+                  </ol>
+                </div>
+                <div class="docs-box docs-box-blue">
+                  <div class="docs-box-title" style="color:var(--blue)">📊 Qué Consolida el Cierre Mensual</div>
+                  <div class="kv-row"><span class="kv-label">Ventas totales</span><span class="kv-value">Suma de todas las semanas</span></div>
+                  <div class="kv-row"><span class="kv-label">Premios totales</span><span class="kv-value">Suma de todas las semanas</span></div>
+                  <div class="kv-row"><span class="kv-label">Gastos operativos</span><span class="kv-value">Por categoría del mes</span></div>
+                  <div class="kv-row"><span class="kv-label">Participaciones</span><span class="kv-value">Total pagado a supervisores</span></div>
+                  <div class="kv-row"><span class="kv-label">Resultado neto</span><span class="kv-value" style="color:var(--accent);font-weight:700">Ganancia/pérdida del mes</span></div>
+                  <div class="kv-row"><span class="kv-label">Saldo banco</span><span class="kv-value">Calculado vs real al cierre</span></div>
+                </div>
+              </div>
+              <div class="docs-box docs-box-yellow" style="margin-bottom:16px">
+                <div class="docs-box-title" style="color:var(--yellow)">⚠️ Diferencia: Cierre Semanal vs Mensual</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:12px">
+                  <div>
+                    <div style="font-weight:700;margin-bottom:6px">Cierre Semanal</div>
+                    <ul style="padding-left:16px;line-height:1.9;margin:0">
+                      <li>Cubre lunes a domingo de UNA semana</li>
+                      <li>Compara saldo banco cada semana</li>
+                      <li>Congela ventas y cuadres de esa semana</li>
+                      <li>Genera el balance para la semana siguiente</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div style="font-weight:700;margin-bottom:6px">Cierre Mensual</div>
+                    <ul style="padding-left:16px;line-height:1.9;margin:0">
+                      <li>Consolida todas las semanas del mes</li>
+                      <li>Base del Estado de Resultados mensual</li>
+                      <li>Permite comparar mes a mes</li>
+                      <li>Necesario para Sección VII (distribución de utilidades)</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="docs-box docs-box-red">
+                <div class="docs-box-title" style="color:var(--red)">🔍 Descuadre en Cierre Mensual — Dónde Buscar</div>
+                <ul style="font-size:12px;padding-left:16px;line-height:2;margin:0">
+                  <li>Revisa <strong>Estado de Resultados → modo mes</strong>: revisa categoría por categoría</li>
+                  <li>Compara el <strong>total ventas mensual vs la suma de semanas</strong> — deben coincidir</li>
+                  <li><strong>Cuenta Banco → filtra por mes</strong>: suma ingresos vs suma cuadres esperados</li>
+                  <li>Verifica que ninguna semana quedó <strong>sin cerrar</strong> — un período abierto no entra al cierre mensual</li>
+                  <li>Revisa <strong>Gastos del mes</strong> — algún gasto puede estar en mes incorrecto</li>
+                </ul>
+              </div>
+            </div>
+          </transition>
+        </div>
+
+        <!-- ─── SECCIÓN: Sección VII ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[4].open=!docsSections[4].open" class="docs-hdr" :class="{open:docsSections[4].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">💰</span>
+              <div><div class="docs-title">Sección VII — ¿A Dónde Va el Dinero?</div><div class="docs-sub">Trazabilidad completa del destino de cada peso generado</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[4].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[4].open" style="border-top:1px solid var(--border);padding:20px">
+              <p class="docs-intro">La <strong>Sección VII</strong> responde la pregunta más importante: <em>"Generé RD$X esta semana — ¿dónde está ese dinero?"</em>. Desglosa el resultado en todas sus partidas para que cada peso quede explicado.</p>
+              <div class="docs-box docs-box-green" style="margin-bottom:16px">
+                <div class="docs-box-title" style="color:var(--accent)">🔢 La Ecuación Fundamental</div>
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;justify-content:center;text-align:center;padding:8px 0">
+                  <div class="docs-eq-box" style="font-weight:700;font-size:13px">Resultado Lotería</div>
+                  <div class="docs-eq-op">=</div>
+                  <div class="docs-eq-box" style="background:rgba(76,201,240,0.1);border-color:rgba(76,201,240,0.3)">💳 Depositado al Central</div>
+                  <div class="docs-eq-op">+</div>
+                  <div class="docs-eq-box" style="background:rgba(255,209,102,0.1);border-color:rgba(255,209,102,0.3)">🤝 Participaciones</div>
+                  <div class="docs-eq-op">+</div>
+                  <div class="docs-eq-box" style="background:rgba(255,77,109,0.1);border-color:rgba(255,77,109,0.3)">🔄 Balances pendientes</div>
+                  <div class="docs-eq-op">+</div>
+                  <div class="docs-eq-box" style="background:rgba(26,115,232,0.1);border-color:rgba(26,115,232,0.3)">💸 Gastos centrales</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                <div style="border:1px solid var(--border);border-radius:8px;padding:14px">
+                  <div class="docs-box-title">📥 Partidas de ENTRADA</div>
+                  <div class="kv-row"><span class="kv-label" style="color:var(--accent)">Resultado Lotería</span><span class="kv-value">Total generado — ventas menos premios y comisiones</span></div>
+                  <div class="kv-row"><span class="kv-label">Avances recuperados</span><span class="kv-value">Avances del CSV cobrados en el cuadre</span></div>
+                  <div class="kv-row"><span class="kv-label">Préstamos cobrados</span><span class="kv-value">Préstamos manuales devueltos por supervisores</span></div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:8px;padding:14px">
+                  <div class="docs-box-title">📤 Partidas de SALIDA</div>
+                  <div class="kv-row"><span class="kv-label" style="color:var(--blue)">Depósitos al central</span><span class="kv-value">Lo que cada supervisor depositó en banco</span></div>
+                  <div class="kv-row"><span class="kv-label" style="color:var(--yellow)">Participaciones</span><span class="kv-value">% de ganancias retenido por supervisores</span></div>
+                  <div class="kv-row"><span class="kv-label" style="color:var(--red)">Balances negativos</span><span class="kv-value">Dinero pendiente que pasó a semana siguiente</span></div>
+                  <div class="kv-row"><span class="kv-label">Gastos centrales</span><span class="kv-value">Gastos pagados desde la central</span></div>
+                  <div class="kv-row"><span class="kv-label">Avances entregados</span><span class="kv-value">Nuevos avances dados esa semana</span></div>
+                </div>
+              </div>
+              <div class="docs-box docs-box-red">
+                <div class="docs-box-title" style="color:var(--red)">🔍 Cómo Usar la Sección VII para Encontrar Descuadres</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px">
+                  <ul style="padding-left:16px;line-height:2;margin:0">
+                    <li>Al final la ecuación debe dar <strong>diferencia = 0</strong></li>
+                    <li>Diferencia <span style="color:var(--accent)">positiva</span> → falta registrar una <strong>salida</strong></li>
+                    <li>Diferencia <span style="color:var(--red)">negativa</span> → falta registrar una <strong>entrada</strong></li>
+                  </ul>
+                  <ul style="padding-left:16px;line-height:2;margin:0">
+                    <li>Busca el grupo con mayor diferencia — ese es el problema</li>
+                    <li>Cruza con <strong>Cuenta Banco</strong>: ¿falta un depósito?</li>
+                    <li>Cruza con <strong>Préstamos</strong>: ¿hay avance sin registrar?</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </transition>
+        </div>
+
+        <!-- ─── SECCIÓN: Flujo de Efectivo ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[5].open=!docsSections[5].open" class="docs-hdr" :class="{open:docsSections[5].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">💵</span>
+              <div><div class="docs-title">Flujo de Efectivo — Guía Detallada</div><div class="docs-sub">Cómo leer e interpretar el flujo para tomar decisiones</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[5].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[5].open" style="border-top:1px solid var(--border);padding:20px">
+              <p class="docs-intro">El <strong>Flujo de Efectivo</strong> muestra el movimiento real del dinero — no el resultado contable, sino el <em>cash</em> que entró y salió. Es la herramienta más directa para saber si tienes liquidez y detectar faltantes.</p>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+                <div class="docs-box docs-box-green" style="text-align:center">
+                  <div style="font-size:28px;margin-bottom:6px">📥</div>
+                  <div style="font-weight:700;font-size:12px;color:var(--accent);margin-bottom:6px">INGRESOS</div>
+                  <div style="font-size:11px;color:var(--muted);line-height:1.7">Depósitos de supervisores<br>Cobros de préstamos<br>Otros ingresos al banco</div>
+                </div>
+                <div class="docs-box docs-box-red" style="text-align:center">
+                  <div style="font-size:28px;margin-bottom:6px">📤</div>
+                  <div style="font-weight:700;font-size:12px;color:var(--red);margin-bottom:6px">EGRESOS</div>
+                  <div style="font-size:11px;color:var(--muted);line-height:1.7">Gastos operativos<br>Préstamos entregados<br>Nóminas y participaciones</div>
+                </div>
+                <div class="docs-box docs-box-blue" style="text-align:center">
+                  <div style="font-size:28px;margin-bottom:6px">📊</div>
+                  <div style="font-weight:700;font-size:12px;color:var(--blue);margin-bottom:6px">SALDO NETO</div>
+                  <div style="font-size:11px;color:var(--muted);line-height:1.7">Ingresos − Egresos<br>Acumulado del período<br>Tendencia semana a semana</div>
+                </div>
+              </div>
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">
+                <div class="docs-box-title">📖 Cómo Leer el Flujo de Efectivo</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:12px">
+                  <div>
+                    <div style="font-weight:700;color:var(--accent);margin-bottom:8px">Vista por Período (semanal)</div>
+                    <ul style="padding-left:16px;line-height:2;margin:0">
+                      <li>Cada fila = una semana de operación</li>
+                      <li>Columna <span style="color:var(--accent)">verde</span> = dinero que <strong>entró</strong> esa semana</li>
+                      <li>Columna <span style="color:var(--red)">roja</span> = dinero que <strong>salió</strong> esa semana</li>
+                      <li>Saldo neto negativo = hay un problema esa semana</li>
+                      <li>Acumulado = desde el inicio del año/mes seleccionado</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div style="font-weight:700;color:var(--blue);margin-bottom:8px">Vista por Mes</div>
+                    <ul style="padding-left:16px;line-height:2;margin:0">
+                      <li>Agrupa todas las semanas del mes</li>
+                      <li>Permite comparar enero vs febrero, etc.</li>
+                      <li>Identifica meses de alto y bajo volumen</li>
+                      <li>La tendencia del acumulado indica salud financiera</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div class="docs-box docs-box-yellow" style="margin-bottom:16px">
+                <div class="docs-box-title" style="color:var(--yellow)">⚠️ Señales de Alerta en el Flujo</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px">
+                  <div>
+                    <div style="font-weight:700;margin-bottom:6px;color:var(--red)">🚨 Señales negativas</div>
+                    <ul style="padding-left:16px;line-height:1.9;margin:0">
+                      <li>Saldo neto negativo dos semanas seguidas</li>
+                      <li>Egresos crecen más rápido que ingresos</li>
+                      <li>Acumulado bajando mes a mes</li>
+                      <li>Semana con ingresos = 0 (falta registrar depósitos)</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div style="font-weight:700;margin-bottom:6px;color:var(--accent)">✅ Señales saludables</div>
+                    <ul style="padding-left:16px;line-height:1.9;margin:0">
+                      <li>Saldo neto positivo consistente</li>
+                      <li>Ingresos ≥ 110% de egresos cada semana</li>
+                      <li>Acumulado creciendo semana a semana</li>
+                      <li>Egresos estables o bajando</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <div style="border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px">
+                <div class="docs-box-title">🔍 Flujo de Efectivo vs Cuenta Banco vs Sección VII</div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+                  <div style="background:rgba(0,229,160,0.06);border-radius:6px;padding:10px">
+                    <div style="font-weight:700;color:var(--accent);margin-bottom:4px">Flujo de Efectivo</div>
+                    <div style="color:var(--muted);line-height:1.7">Vista agregada por semana/mes. Ideal para tendencias y decisiones gerenciales rápidas.</div>
+                  </div>
+                  <div style="background:rgba(76,201,240,0.06);border-radius:6px;padding:10px">
+                    <div style="font-weight:700;color:var(--blue);margin-bottom:4px">Cuenta Banco</div>
+                    <div style="color:var(--muted);line-height:1.7">Movimiento a movimiento. Para auditar una transacción específica o verificar un depósito puntual.</div>
+                  </div>
+                  <div style="background:rgba(255,209,102,0.06);border-radius:6px;padding:10px">
+                    <div style="font-weight:700;color:var(--yellow);margin-bottom:4px">Sección VII</div>
+                    <div style="color:var(--muted);line-height:1.7">Distribución del resultado. Para entender a dónde fue cada peso del resultado de lotería.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </transition>
+        </div>
+
+        <!-- ─── SECCIÓN: Tablas ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[6].open=!docsSections[6].open" class="docs-hdr" :class="{open:docsSections[6].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">🗄️</span>
+              <div><div class="docs-title">Estructura de Tablas — Referencia Técnica</div><div class="docs-sub">Descripción de cada tabla y sus campos principales</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[6].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[6].open" style="border-top:1px solid var(--border);padding:20px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div class="card" style="margin:0">
+                  <div class="card-header"><div class="card-title">📋 grupos</div></div>
+                  <div class="card-body" style="font-size:12px">
+                    <p style="color:var(--muted);margin-bottom:10px">Supervisores o grupos de ventas. Cada grupo agrupa varias bancas.</p>
+                    <div class="kv-row"><span class="kv-label">nombre, codigo</span><span class="kv-value">identificación</span></div>
+                    <div class="kv-row"><span class="kv-label">porcentaje_participacion</span><span class="kv-value" style="color:var(--yellow)">% de ganancias que retiene el supervisor</span></div>
+                    <div class="kv-row"><span class="kv-label">activo</span><span class="kv-value">si aparece en cuadres</span></div>
+                    <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">📝 Crea todos los grupos antes de crear bancas.</div>
+                  </div>
+                </div>
+                <div class="card" style="margin:0">
+                  <div class="card-header"><div class="card-title">🏪 bancas</div></div>
+                  <div class="card-body" style="font-size:12px">
+                    <p style="color:var(--muted);margin-bottom:10px">Vendedores, agencias o verifones. Pertenecen a un grupo.</p>
+                    <div class="kv-row"><span class="kv-label">codigo, nombre, agencia</span><span class="kv-value">identificación</span></div>
+                    <div class="kv-row"><span class="kv-label">usuario_sistema</span><span class="kv-value" style="color:var(--accent)">⚠️ CLAVE para mapeo CSV</span></div>
+                    <div class="kv-row"><span class="kv-label">porcentaje_comision</span><span class="kv-value">% sobre ventas que gana el vendedor</span></div>
+                    <div class="kv-row"><span class="kv-label">grupo_id</span><span class="kv-value">a qué grupo pertenece</span></div>
+                    <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">📝 El campo usuario_sistema debe coincidir con la columna Usuario del CSV.</div>
+                  </div>
+                </div>
+                <div class="card" style="margin:0">
+                  <div class="card-header"><div class="card-title">📅 periodos</div></div>
+                  <div class="card-body" style="font-size:12px">
+                    <p style="color:var(--muted);margin-bottom:10px">Una semana de cuadre (lunes a domingo). Todo se filtra por período.</p>
+                    <div class="kv-row"><span class="kv-label">fecha_inicio, fecha_fin</span><span class="kv-value">rango de la semana</span></div>
+                    <div class="kv-row"><span class="kv-label">descripcion</span><span class="kv-value">ej: "Semana 16 al 22 Febrero"</span></div>
+                    <div class="kv-row"><span class="kv-label">cerrado</span><span class="kv-value">marca semana como finalizada</span></div>
+                    <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">📝 Cada lunes, crea el nuevo período antes de importar ventas.</div>
+                  </div>
+                </div>
+                <div class="card" style="margin:0">
+                  <div class="card-header"><div class="card-title">💰 ventas_semana</div></div>
+                  <div class="card-body" style="font-size:12px">
+                    <p style="color:var(--muted);margin-bottom:10px">Datos del sistema: ventas, premios y avances por banca/semana.</p>
+                    <div class="kv-row"><span class="kv-label">ventas, premios</span><span class="kv-value">datos del sistema de lotería</span></div>
+                    <div class="kv-row"><span class="kv-label" style="color:var(--blue)">avances</span><span class="kv-value" style="color:var(--blue)">préstamos entregados mid-week</span></div>
+                    <div class="kv-row"><span class="kv-label">recargas, servicios</span><span class="kv-value">otros ingresos del sistema</span></div>
+                    <div class="alert alert-success" style="margin-top:10px;margin-bottom:0;font-size:11px">📥 Via importación CSV o ingreso manual.</div>
+                  </div>
+                </div>
+                <div class="card" style="margin:0">
+                  <div class="card-header"><div class="card-title">💸 gastos</div></div>
+                  <div class="card-body" style="font-size:12px">
+                    <p style="color:var(--muted);margin-bottom:10px">Gastos operativos por banca o grupo. Se descuentan del resultado.</p>
+                    <div class="kv-row"><span class="kv-label">operativo</span><span class="kv-value">internet, materiales, etc.</span></div>
+                    <div class="kv-row"><span class="kv-label">central</span><span class="kv-value">gastos que paga la central</span></div>
+                    <div class="kv-row"><span class="kv-label" style="color:var(--yellow)">participacion</span><span class="kv-value" style="color:var(--yellow)">se crea automáticamente al guardar cuadre</span></div>
+                    <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">📝 Registrar antes de ejecutar el cuadre.</div>
+                  </div>
+                </div>
+                <div class="card" style="margin:0">
+                  <div class="card-header"><div class="card-title">⚖️ cuadres_grupo</div></div>
+                  <div class="card-body" style="font-size:12px">
+                    <p style="color:var(--muted);margin-bottom:10px">El resultado final del cuadre semanal por grupo.</p>
+                    <div class="kv-row"><span class="kv-label">resultado_loteria</span><span class="kv-value">resultado total del grupo</span></div>
+                    <div class="kv-row"><span class="kv-label">balance_pendiente_anterior</span><span class="kv-value">del cuadre previo</span></div>
+                    <div class="kv-row"><span class="kv-label">total_a_depositar</span><span class="kv-value">lo que debe dar el supervisor</span></div>
+                    <div class="kv-row"><span class="kv-label">balance_final</span><span class="kv-value">→ se usa como balance_anterior del próximo cuadre</span></div>
+                    <div class="alert alert-success" style="margin-top:10px;margin-bottom:0;font-size:11px">✅ balance_final esta semana → balance_anterior próxima semana.</div>
+                  </div>
+                </div>
+                <div class="card" style="margin:0">
+                  <div class="card-header"><div class="card-title">💰 prestamos</div></div>
+                  <div class="card-body" style="font-size:12px">
+                    <p style="color:var(--muted);margin-bottom:10px">Préstamos/avances adicionales manuales durante la semana.</p>
+                    <div class="kv-row"><span class="kv-label">tipo: salida</span><span class="kv-value">dinero entregado al supervisor</span></div>
+                    <div class="kv-row"><span class="kv-label">tipo: entrada</span><span class="kv-value">devolución del supervisor</span></div>
+                    <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">📝 Los avances del CSV son automáticos. Los préstamos aquí son movimientos manuales por grupo.</div>
+                  </div>
+                </div>
+                <div class="card" style="margin:0">
+                  <div class="card-header"><div class="card-title">🏦 cuenta_banco</div></div>
+                  <div class="card-body" style="font-size:12px">
+                    <p style="color:var(--muted);margin-bottom:10px">Registro de todos los movimientos bancarios de la central.</p>
+                    <div class="kv-row"><span class="kv-label">tipo: ingreso</span><span class="kv-value">dinero recibido (de supervisores, etc.)</span></div>
+                    <div class="kv-row"><span class="kv-label">tipo: egreso</span><span class="kv-value">dinero salido (gastos, préstamos, etc.)</span></div>
+                    <div class="kv-row"><span class="kv-label">saldo_acumulado</span><span class="kv-value">calculado automáticamente</span></div>
+                    <div class="kv-row"><span class="kv-label">categoria</span><span class="kv-value">cuadre, gasto_operativo, nomina, participacion, otro</span></div>
+                    <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">📝 Registrar cada vez que haya un movimiento real en la cuenta bancaria.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </transition>
+        </div>
+
+        <!-- ─── SECCIÓN: Caja Central ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[7].open=!docsSections[7].open" class="docs-hdr" :class="{open:docsSections[7].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">🏧</span>
+              <div><div class="docs-title">Caja Central — Guía Completa</div><div class="docs-sub">Cómo funciona el fondo físico de oficina y cómo registrar cada movimiento</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[7].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[7].open" style="border-top:1px solid var(--border);padding:20px">
+
+              <p class="docs-intro">La <strong>Caja Central</strong> es el efectivo físico que hay en la oficina — el dinero que entra de los supervisores, el que sale hacia el banco o hacia pagos, y el saldo que queda disponible en todo momento. No es un registro contable: es el <em>efectivo real que puedes contar en la gaveta</em>.</p>
+
+              <!-- ¿Qué es? -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+                <div class="docs-box docs-box-green">
+                  <div class="docs-box-title">📥 Entradas a Caja</div>
+                  <div class="kv-row"><span class="kv-label">Recibo de supervisor</span><span class="kv-value num-pos">El supervisor entrega su liquidación semanal en efectivo</span></div>
+                  <div class="kv-row"><span class="kv-label">Préstamo recibido</span><span class="kv-value num-pos">Capital externo que entra físicamente</span></div>
+                  <div class="kv-row"><span class="kv-label">Reintegro</span><span class="kv-value num-pos">Devolucion de gastos o adelantos previos</span></div>
+                  <div class="kv-row"><span class="kv-label">Otro ingreso</span><span class="kv-value num-pos">Cualquier efectivo que entre a la oficina</span></div>
+                </div>
+                <div class="docs-box docs-box-red">
+                  <div class="docs-box-title">📤 Salidas de Caja</div>
+                  <div class="kv-row"><span class="kv-label">Depósito al banco</span><span class="kv-value num-neg">Llevas efectivo a la cuenta bancaria</span></div>
+                  <div class="kv-row"><span class="kv-label">Pago de gasto</span><span class="kv-value num-neg">Pagas algo directamente con efectivo de caja</span></div>
+                  <div class="kv-row"><span class="kv-label">Préstamo otorgado</span><span class="kv-value num-neg">Adelanto o préstamo que sale físicamente</span></div>
+                  <div class="kv-row"><span class="kv-label">Entrega a supervisor</span><span class="kv-value num-neg">Devuelves o adelantas efectivo a un supervisor</span></div>
+                </div>
+              </div>
+
+              <!-- Cómo registrar -->
+              <div class="docs-col-label" style="margin-bottom:10px">CÓMO REGISTRAR UN MOVIMIENTO</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:20px">
+                <div class="docs-step" style="--c:var(--accent)"><div style="font-size:20px">1️⃣</div><div class="docs-step-t">IR A CAJA CENTRAL</div><div class="docs-step-d">Menú lateral → Caja Central</div></div>
+                <div class="docs-step" style="--c:var(--blue)"><div style="font-size:20px">2️⃣</div><div class="docs-step-t">NUEVO MOVIMIENTO</div><div class="docs-step-d">Botón azul arriba a la derecha</div></div>
+                <div class="docs-step" style="--c:var(--yellow)"><div style="font-size:20px">3️⃣</div><div class="docs-step-t">TIPO: ENTRADA O SALIDA</div><div class="docs-step-d">Seleccionar si el dinero entra o sale</div></div>
+                <div class="docs-step" style="--c:var(--yellow)"><div style="font-size:20px">4️⃣</div><div class="docs-step-t">CATEGORÍA Y GRUPO</div><div class="docs-step-d">¿De quién viene o a quién va?</div></div>
+                <div class="docs-step" style="--c:var(--accent)"><div style="font-size:20px">5️⃣</div><div class="docs-step-t">MONTO Y CONCEPTO</div><div class="docs-step-d">Monto exacto + descripción clara</div></div>
+                <div class="docs-step" style="--c:var(--blue)"><div style="font-size:20px">6️⃣</div><div class="docs-step-t">GUARDAR</div><div class="docs-step-d">El saldo se actualiza automáticamente</div></div>
+              </div>
+
+              <!-- Ejemplo práctico -->
+              <div class="docs-col-label" style="margin-bottom:10px">EJEMPLO PRÁCTICO — SEMANA COMPLETA</div>
+              <div class="docs-box docs-box-blue" style="margin-bottom:16px">
+                <div class="docs-box-title">📅 Lunes — Inicio de semana</div>
+                <div class="kv-row"><span class="kv-label">Saldo inicial en caja</span><span class="kv-value num-pos">$15,000</span></div>
+                <div style="font-size:11px;color:var(--muted);margin-top:4px">El saldo que quedó de la semana anterior. No se registra — ya está en el sistema.</div>
+              </div>
+              <div class="docs-box docs-box-green" style="margin-bottom:12px">
+                <div class="docs-box-title">📥 Jueves — Supervisores liquidan</div>
+                <div class="kv-row"><span class="kv-label">Entrada: Supervisor CAPITAL entrega</span><span class="kv-value num-pos">+ $48,000</span></div>
+                <div class="kv-row"><span class="kv-label">Entrada: Supervisor DIN entrega</span><span class="kv-value num-pos">+ $30,000</span></div>
+                <div class="kv-row"><span class="kv-label">Entrada: Supervisor CHICO entrega</span><span class="kv-value num-pos">+ $16,000</span></div>
+                <div class="kv-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span class="kv-label"><strong>Saldo caja después de entradas</strong></span><span class="kv-value num-pos"><strong>$109,000</strong></span></div>
+              </div>
+              <div class="docs-box docs-box-red" style="margin-bottom:12px">
+                <div class="docs-box-title">📤 Viernes — Depósito y pagos</div>
+                <div class="kv-row"><span class="kv-label">Salida: Depósito al banco</span><span class="kv-value num-neg">- $75,000</span></div>
+                <div class="kv-row"><span class="kv-label">Salida: Pago proveedor internet</span><span class="kv-value num-neg">- $2,300</span></div>
+                <div class="kv-row"><span class="kv-label">Salida: Adelanto supervisor SANTANA</span><span class="kv-value num-neg">- $5,000</span></div>
+                <div class="kv-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span class="kv-label"><strong>Saldo caja al cierre viernes</strong></span><span class="kv-value num-pos"><strong>$26,700</strong></span></div>
+              </div>
+              <div class="docs-note docs-note-accent" style="margin-bottom:16px">
+                <strong>💡 Regla de oro:</strong> Cada vez que tocas dinero físico en la oficina — sea que entre o salga — debes registrarlo en Caja Central. Si el saldo del sistema no coincide con lo que hay físicamente, hay un movimiento sin registrar.
+              </div>
+
+              <!-- KPIs que ves en pantalla -->
+              <div class="docs-col-label" style="margin-bottom:10px">LOS 4 INDICADORES QUE VES EN PANTALLA</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">
+                <div class="docs-box docs-box-green"><div class="docs-box-title">💰 Saldo en Caja</div><div style="font-size:12px">El efectivo disponible ahora mismo. Suma de todas las entradas menos todas las salidas desde el inicio.</div></div>
+                <div class="docs-box docs-box-blue"><div class="docs-box-title">📥 Total Entradas</div><div style="font-size:12px">Todo el efectivo que ha entrado a la caja en el período filtrado (semana/mes).</div></div>
+                <div class="docs-box docs-box-red"><div class="docs-box-title">📤 Total Salidas</div><div style="font-size:12px">Todo el efectivo que ha salido — depósitos, pagos, préstamos, adelantos.</div></div>
+                <div class="docs-box docs-box-yellow"><div class="docs-box-title">🏦 Depositado</div><div style="font-size:12px">Solo las salidas marcadas como "depósito al banco" — para reconciliar con el saldo bancario.</div></div>
+              </div>
+
+              <!-- Diferencia caja vs banco -->
+              <div class="docs-note docs-note-surface">
+                <strong>🏦 Caja Central ≠ Cuenta Bancaria</strong><br>
+                Son dos registros separados. La caja es el efectivo físico en la oficina. El banco es el saldo en la cuenta. Cuando depositas, el dinero sale de caja y entra al banco — debes registrarlo en <em>ambos</em> módulos para que los saldos cuadren.
+              </div>
+
+            </div>
+          </transition>
+        </div>
+
+        <!-- ─── SECCIÓN: Flujo de Caja vs Contabilidad ─── -->
+        <div class="card" style="margin-bottom:12px;overflow:hidden">
+          <div @click="docsSections[8].open=!docsSections[8].open" class="docs-hdr" :class="{open:docsSections[8].open}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:20px">💸</span>
+              <div><div class="docs-title">Flujo de Caja vs Contabilidad — La Diferencia Clave</div><div class="docs-sub">Por qué el resultado contable y el efectivo real son distintos y cómo reconciliarlos</div></div>
+            </div>
+            <span class="docs-arrow" :class="{rotated:docsSections[8].open}">▾</span>
+          </div>
+          <transition name="docs-collapse">
+            <div v-if="docsSections[8].open" style="border-top:1px solid var(--border);padding:20px">
+
+              <p class="docs-intro">Esta es la pregunta más frecuente en el negocio: <strong>¿Por qué el sistema dice que gané $140,000 pero en caja solo hay $26,000?</strong> La respuesta está en entender que el resultado contable y el efectivo físico son dos cosas distintas que LottoAdmin te permite ver y reconciliar.</p>
+
+              <!-- Las dos columnas -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+                <div class="docs-box docs-box-blue">
+                  <div class="docs-box-title">📊 Resultado Contable (P&L)</div>
+                  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Lo que calcula el sistema basado en ventas, premios y gastos</div>
+                  <div class="kv-row"><span class="kv-label">Ventas</span><span class="kv-value">$1,102,701</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Premios</span><span class="kv-value num-neg">- $823,411</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Comisiones</span><span class="kv-value num-neg">- $136,658</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Gastos Op.</span><span class="kv-value num-neg">- $17,300</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Participaciones</span><span class="kv-value num-neg">- $5,378</span></div>
+                  <div class="kv-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px"><span class="kv-label"><strong>= Resultado Neto</strong></span><span class="kv-value num-pos"><strong>$119,954</strong></span></div>
+                </div>
+                <div class="docs-box docs-box-green">
+                  <div class="docs-box-title">🏧 Flujo de Caja Real</div>
+                  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">El dinero que realmente entró y salió de la caja/banco</div>
+                  <div class="kv-row"><span class="kv-label">Ingresos recibidos de supervisores</span><span class="kv-value num-pos">+ $94,000</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Gastos pagados en efectivo</span><span class="kv-value num-neg">- $19,600</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Préstamo otorgado</span><span class="kv-value num-neg">- $5,000</span></div>
+                  <div class="kv-row"><span class="kv-label">(-) Depositado al banco</span><span class="kv-value num-neg">- $75,000</span></div>
+                  <div class="kv-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px"><span class="kv-label"><strong>= Efectivo en caja ahora</strong></span><span class="kv-value num-pos"><strong>$26,700 ✅</strong></span></div>
+                </div>
+              </div>
+
+              <!-- Por qué son distintos -->
+              <div class="docs-col-label" style="margin-bottom:10px">¿POR QUÉ SON DISTINTOS? — LAS 4 CAUSAS PRINCIPALES</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+                <div class="docs-box docs-box-yellow">
+                  <div class="docs-box-title">⏳ 1. Balances pendientes</div>
+                  <div style="font-size:12px">El supervisor tiene un resultado de $48,000 pero aún no lo entregó todo. Lo que falta entregar es resultado contable que todavía no es efectivo en caja.</div>
+                </div>
+                <div class="docs-box docs-box-yellow">
+                  <div class="docs-box-title">💳 2. Préstamos otorgados</div>
+                  <div style="font-size:12px">Prestaste $15,000 a un supervisor. Ese dinero salió de caja pero no es un gasto contable — es un activo (te lo deben). Baja el efectivo pero no el resultado.</div>
+                </div>
+                <div class="docs-box docs-box-blue">
+                  <div class="docs-box-title">🏦 3. Dinero en el banco</div>
+                  <div style="font-size:12px">Depositaste $75,000 al banco. Ese efectivo no está en caja, está en la cuenta bancaria. El dinero existe, solo cambió de lugar.</div>
+                </div>
+                <div class="docs-box docs-box-red">
+                  <div class="docs-box-title">📅 4. Timing de pagos</div>
+                  <div style="font-size:12px">Pagaste gastos que corresponden a semanas anteriores, o tienes deudas de semanas previas que todavía no se cobraron. El P&L y el cash tienen tiempos distintos.</div>
+                </div>
+              </div>
+
+              <!-- Reconciliación práctica -->
+              <div class="docs-col-label" style="margin-bottom:10px">RECONCILIACIÓN — CÓMO CUADRAR LOS DOS NÚMEROS</div>
+              <div class="docs-note docs-note-accent" style="margin-bottom:16px">
+                <strong>Fórmula de reconciliación:</strong><br><br>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">
+                  <div class="docs-pill">Resultado Contable<br><strong>$119,954</strong></div>
+                  <span class="docs-eq-op">−</span>
+                  <div class="docs-pill">Balances Pendientes<br><strong>$48,734</strong></div>
+                  <span class="docs-eq-op">−</span>
+                  <div class="docs-pill">Préstamos Netos<br><strong>$15,000</strong></div>
+                  <span class="docs-eq-op">+</span>
+                  <div class="docs-pill">Saldo Banco<br><strong>$25,358</strong></div>
+                  <span class="docs-eq-op">≈</span>
+                  <div class="docs-pill" style="border-color:var(--accent);color:var(--accent)">Efectivo en Caja<br><strong>$26,700 ✅</strong></div>
+                </div>
+              </div>
+
+              <!-- Dónde ver cada cosa en el sistema -->
+              <div class="docs-col-label" style="margin-bottom:10px">DÓNDE VER CADA NÚMERO EN EL SISTEMA</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                <div>
+                  <div class="kv-row"><span class="kv-label">📊 Resultado contable</span><span class="kv-value">Dashboard → Resultado Neto</span></div>
+                  <div class="kv-row"><span class="kv-label">⏳ Balances pendientes</span><span class="kv-value">Resumen Semanal → columna Pend. Anterior</span></div>
+                  <div class="kv-row"><span class="kv-label">💳 Préstamos netos</span><span class="kv-value">Módulo Préstamos → saldo activo</span></div>
+                </div>
+                <div>
+                  <div class="kv-row"><span class="kv-label">🏦 Saldo bancario</span><span class="kv-value">Cuenta Banco → saldo acumulado</span></div>
+                  <div class="kv-row"><span class="kv-label">🏧 Efectivo en caja</span><span class="kv-value">Caja Central → indicador Saldo en Caja</span></div>
+                  <div class="kv-row"><span class="kv-label">📈 Reconciliación completa</span><span class="kv-value">¿A Dónde Va el Dinero? → Diferencia P&L vs Caja</span></div>
+                </div>
+              </div>
+
+              <div class="docs-note docs-note-surface">
+                <strong>🎯 Resumen ejecutivo:</strong> Si el sistema dice que ganaste $X, ese dinero está distribuido entre: (1) efectivo en caja, (2) saldo en banco, (3) lo que te deben los supervisores, y (4) préstamos por cobrar. La suma de los cuatro debe aproximarse a tu resultado neto. Cuando hay diferencia, el módulo <em>¿A Dónde Va el Dinero?</em> te muestra exactamente dónde está la brecha.
+              </div>
+
+            </div>
+          </transition>
+        </div>
+
       </div>
 
-
-      <!-- ══ CATEGORÍAS ══ -->
-      <div v-if="view==='categorias'">
+<!-- ══ CATEGORÍAS ══ -->
+      <div v-if="view==='categorias' && canView('categorias')">
         <div class="section-header">
           <div>
             <div class="section-title">🏷️ Categorías de Movimientos</div>
@@ -3015,7 +3524,7 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <button class="btn btn-primary" @click="editarCategoria({tipo:'egreso',activo:true,orden:0})">+ Nueva Categoría</button>
+            <button v-if="canEdit('categorias')" class="btn btn-primary" @click="editarCategoria({tipo:'egreso',activo:true,orden:0})">+ Nueva Categoría</button>
           </div>
         </div>
         <div class="grid-2">
@@ -3124,7 +3633,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ FLUJO DE EFECTIVO ══ -->
-      <div v-if="view==='flujo'">
+      <div v-if="view==='flujo' && canView('flujo')">
         <div class="section-header">
           <div>
             <div class="section-title">💵 Flujo de Efectivo Real</div>
@@ -3392,7 +3901,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ ESTADO DE RESULTADOS ══ -->
-      <div v-if="view==='estado_resultados'">
+      <div v-if="view==='estado_resultados' && canView('estado_resultados')">
         <div class="section-header">
           <div>
             <div class="section-title">📑 Estado de Resultados (P&L)</div>
@@ -3606,7 +4115,7 @@ onMounted(async () => {
       </div>
 
       <!-- ══ SECCIÓN VII — ¿A Dónde Va el Dinero? ══ -->
-      <div v-if="view==='seccion_vii'">
+      <div v-if="view==='seccion_vii' && canView('seccion_vii')">
 
         <div class="section-header">
           <div>
@@ -3708,7 +4217,7 @@ onMounted(async () => {
                                 'border-bottom:1px solid var(--border)'">
                       <td style="padding:10px 16px">
                         <span v-if="row.tipo==='total'" style="color:var(--accent)">▶</span>
-                        <span v-else-if="row.tipo==='subtotal'" style="color:var(--text-muted)">→</span>
+                        <span v-else-if="row.tipo==='subtotal'" style="color:var(--muted)">→</span>
                         <span v-else-if="row.valor<0" style="color:var(--red)">▼</span>
                         <span v-else style="color:var(--green)">▲</span>
                         {{ row.label }}
@@ -3835,7 +4344,7 @@ onMounted(async () => {
                   </tr>
                 </tbody>
                 <tfoot>
-                  <tr style="font-weight:700;background:var(--bg-hover)">
+                  <tr style="font-weight:700;background:var(--surface2)">
                     <td>TOTAL</td>
                     <td style="text-align:right" :class="s7Data.resultado_neto>=0?'num-pos':'num-neg'">{{ fmt(s7Data.resultado_neto) }}</td>
                     <td style="text-align:right;color:var(--accent)">{{ fmt(s7Data.depositado_total) }}</td>
@@ -3894,7 +4403,7 @@ onMounted(async () => {
 
       <!-- ══ USUARIOS ══ -->
       <!-- ══ USUARIOS ══ -->
-      <div v-if="view==='usuarios'">
+      <div v-if="view==='usuarios' && canView('usuarios')">
         <div class="section-header">
           <div>
             <div class="section-title">👤 Usuarios del Sistema</div>
@@ -3966,7 +4475,7 @@ onMounted(async () => {
               <!-- Overlay -->
               <div style="flex:1;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px)" @click="showUserDrawer=false"></div>
               <!-- Panel derecho -->
-              <div style="width:420px;max-width:95vw;background:var(--bg-card);height:100%;display:flex;flex-direction:column;box-shadow:-6px 0 32px rgba(0,0,0,0.25);overflow:hidden">
+              <div style="width:420px;max-width:95vw;background:var(--surface);height:100%;display:flex;flex-direction:column;box-shadow:-6px 0 32px rgba(0,0,0,0.25);overflow:hidden">
 
                 <!-- Header del drawer -->
                 <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--accent);color:#fff">
@@ -4024,7 +4533,7 @@ onMounted(async () => {
                       <label class="form-label">Email *</label>
                       <input class="form-control" type="email" v-model="userFrm.email" placeholder="usuario@empresa.com"/>
                     </div>
-                    <div v-else style="margin-top:12px;padding:10px 12px;background:var(--bg-hover);border-radius:6px;font-size:12px;color:var(--muted)">
+                    <div v-else style="margin-top:12px;padding:10px 12px;background:var(--surface2);border-radius:6px;font-size:12px;color:var(--muted)">
                       📧 <strong>{{ userFrm.email }}</strong> — el email no se puede cambiar
                     </div>
 
@@ -4089,7 +4598,7 @@ onMounted(async () => {
                         📧 Enviar enlace de restablecimiento
                       </button>
                     </div>
-                    <div style="padding:10px 12px;background:var(--bg-hover);border-radius:6px;font-size:11px;color:var(--muted)">
+                    <div style="padding:10px 12px;background:var(--surface2);border-radius:6px;font-size:11px;color:var(--muted)">
                       ID Auth: <code style="font-size:10px">{{ editUserId }}</code>
                     </div>
                   </div>
@@ -4097,7 +4606,7 @@ onMounted(async () => {
                 </div>
 
                 <!-- Footer fijo -->
-                <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;background:var(--bg-card)">
+                <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;background:var(--surface)">
                   <button class="btn btn-secondary" @click="showUserDrawer=false">Cancelar</button>
                   <button class="btn btn-primary" @click="saveUsuario" :disabled="savingUser" style="min-width:120px">
                     <span v-if="savingUser">⏳ Guardando...</span>
@@ -4112,7 +4621,7 @@ onMounted(async () => {
       <!-- /USUARIOS -->
 
       <!-- ══ PERFILES Y PERMISOS ══ -->
-      <div v-if="view==='perfiles'">
+      <div v-if="view==='perfiles' && canView('perfiles')">
         <div class="section-header">
           <div>
             <div class="section-title">🔐 Perfiles y Permisos</div>
@@ -4152,7 +4661,7 @@ onMounted(async () => {
             <div v-if="showPerfilDrawer" style="position:fixed;inset:0;z-index:1100;display:flex">
               <div style="flex:1;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px)" @click="showPerfilDrawer=false"></div>
               <!-- Panel — más ancho para tabla de permisos -->
-              <div style="width:580px;max-width:96vw;background:var(--bg-card);height:100%;display:flex;flex-direction:column;box-shadow:-6px 0 32px rgba(0,0,0,0.25)">
+              <div style="width:580px;max-width:96vw;background:var(--surface);height:100%;display:flex;flex-direction:column;box-shadow:-6px 0 32px rgba(0,0,0,0.25)">
 
                 <!-- Header -->
                 <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:space-between">
@@ -4196,7 +4705,7 @@ onMounted(async () => {
                     </div>
 
                     <!-- Encabezado columnas -->
-                    <div style="display:grid;grid-template-columns:1fr 52px 52px 62px;gap:4px;padding:6px 10px;background:var(--bg-hover);border-radius:6px;margin-bottom:8px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">
+                    <div style="display:grid;grid-template-columns:1fr 52px 52px 62px;gap:4px;padding:6px 10px;background:var(--surface2);border-radius:6px;margin-bottom:8px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">
                       <div>Módulo</div>
                       <div style="text-align:center">Ver</div>
                       <div style="text-align:center">Editar</div>
@@ -4251,7 +4760,7 @@ onMounted(async () => {
                 </div>
 
                 <!-- Footer -->
-                <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;background:var(--bg-card)">
+                <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;background:var(--surface)">
                   <button class="btn btn-secondary" @click="showPerfilDrawer=false">Cancelar</button>
                   <button class="btn btn-primary" @click="savePerfil" :disabled="savingPerfil" style="min-width:130px">
                     <span v-if="savingPerfil">⏳ Guardando...</span>
@@ -4267,7 +4776,7 @@ onMounted(async () => {
 
 
       <!-- ══ CONFIGURACIÓN ══ -->
-      <div v-if="view==='config'">
+      <div v-if="view==='config' && canView('config')">
         <div class="section-header">
           <div><div class="section-title">Configuración</div></div>
         </div>
@@ -4311,179 +4820,15 @@ onMounted(async () => {
         </div>
       </div>
 
-    </div><!-- /content -->
-    </main>
 
-      <!-- ══ MODALS ══ -->
-
-  <!-- GASTO MODAL -->
-  <div class="overlay" v-if="showGastoModal" @click.self="showGastoModal=false">
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title">{{ gastoEditId ? "✏️ Editar Gasto" : "💸 Registrar Gasto" }}</div>
-        <button class="close-btn" @click="showGastoModal=false">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-grid">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Período</label>
-              <select class="form-control" v-model="gastoFrm.periodo_id">
-                <option value="">— Período —</option>
-                <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Fecha</label>
-              <input type="date" class="form-control" v-model="gastoFrm.fecha"/>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Grupo</label>
-              <select class="form-control" v-model="gastoFrm.grupo_id" @change="gastoFrm.banca_id=''">
-                <option value="">— Grupo (opcional) —</option>
-                <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">
-                Banca
-                <span v-if="gastoFrm.tipo==='operativo'" style="color:var(--blue);font-size:9px;margin-left:4px">
-                  ★ asigna al cuadre
-                </span>
-              </label>
-              <select class="form-control"
-                :style="gastoFrm.tipo==='operativo' && !gastoFrm.banca_id ? 'border-color:rgba(76,201,240,0.6)' : ''"
-                v-model="gastoFrm.banca_id">
-                <option value="">{{ gastoFrm.tipo==='operativo' ? '— Sin banca (va a total del grupo) —' : '— Banca (opcional) —' }}</option>
-                <option v-for="b in (gastoFrm.grupo_id ? bancas.filter(b=>b.grupo_id===gastoFrm.grupo_id) : bancas)"
-                        :key="b.id" :value="b.id">{{ b.codigo }} — {{ b.nombre }}</option>
-              </select>
-            </div>
-          </div>
-          <!-- Tip contextual según tipo -->
-          <div v-if="gastoFrm.tipo==='operativo'" class="alert alert-info" style="font-size:11px;padding:8px 12px">
-            💡 <strong>Operativo</strong> — Este gasto <strong>aparecerá en el cuadre</strong> del supervisor y se descontará del resultado.
-            <span v-if="!gastoFrm.banca_id"> Sin banca: se descuenta del total del grupo.</span>
-            <span v-else> Se asignará a la banca seleccionada.</span>
-          </div>
-          <div v-else-if="gastoFrm.tipo==='central'" class="alert" style="font-size:11px;padding:8px 12px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);color:var(--yellow)">
-            🏢 <strong>Central</strong> — Gasto de administración central. <strong>No aparece en cuadres de supervisores.</strong>
-          </div>
-          <div class="form-row">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Categoría de Gasto</label>
-              <select class="form-control" v-model="gastoFrm.categoria_id">
-                <option value="">— Seleccionar categoría —</option>
-                <option v-for="c in categorias.filter(c=>c.tipo==='egreso'&&c.activo)" :key="c.id" :value="c.id">
-                  {{ c.nombre }}
-                </option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Tipo de Gasto</label>
-              <select class="form-control" v-model="gastoFrm.tipo">
-                <option value="operativo">Operativo</option>
-                <option value="central">Central</option>
-                <option value="sistema">Sistema</option>
-                <option value="equipo">Equipo</option>
-                <option value="otro">Otro</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Monto</label>
-              <input type="number" class="form-control" v-model.number="gastoFrm.monto" placeholder="0"/>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Concepto / Descripción</label>
-            <input type="text" class="form-control" v-model="gastoFrm.concepto" placeholder="Ej: Pago internet banca 3005"/>
-          </div>
-        </div>
-      </div>
-      <!-- Propagación cruzada -->
-      <div style="padding:0 24px 16px;border-top:1px solid var(--border)">
-        <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px;margin-top:12px;text-transform:uppercase;letter-spacing:0.5px">
-          🔗 {{ gastoEditId ? 'Sincronizar registros vinculados' : 'Registrar también en:' }}
-        </div>
-
-        <!-- CREAR: checkboxes para propagar -->
-        <div v-if="!gastoEditId" style="display:flex;flex-direction:column;gap:10px">
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="gastoPropagarBanco?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
-            <input type="checkbox" v-model="gastoPropagarBanco" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
-            <div>
-              <div style="font-weight:600;font-size:13px">🏦 Cuenta Bancaria</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Se registra como egreso en Banco. Copia grupo, período, categoría.</div>
-            </div>
-          </label>
-          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="gastoPropagarFlujo?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
-            <input type="checkbox" v-model="gastoPropagarFlujo" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
-            <div>
-              <div style="font-weight:600;font-size:13px">💸 Flujo de Efectivo</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Se registra como egreso en Flujo. Copia grupo, período, categoría.</div>
-            </div>
-          </label>
-        </div>
-
-        <!-- EDITAR: sincronizar cambios a registros vinculados existentes -->
-        <div v-else style="display:flex;flex-direction:column;gap:10px">
-          <label v-if="gastoTieneRefBanco" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="gastoSincBanco?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
-            <input type="checkbox" v-model="gastoSincBanco" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
-            <div>
-              <div style="font-weight:600;font-size:13px">🏦 Actualizar registro en Banco</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Sincroniza monto, concepto, fecha y categoría al registro vinculado en Banco.</div>
-            </div>
-          </label>
-          <label v-if="gastoTieneRefFlujo" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="gastoSincFlujo?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
-            <input type="checkbox" v-model="gastoSincFlujo" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
-            <div>
-              <div style="font-weight:600;font-size:13px">💸 Actualizar registro en Flujo</div>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Sincroniza monto, concepto, fecha, grupo, período y categoría al registro vinculado en Flujo.</div>
-            </div>
-          </label>
-          <div v-if="!gastoTieneRefBanco && !gastoTieneRefFlujo" style="font-size:12px;color:var(--text-muted);padding:8px 12px;background:var(--bg-hover);border-radius:8px">
-            Este gasto no tiene registros vinculados en Banco ni en Flujo.
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" @click="showGastoModal=false">Cancelar</button>
-        <button class="btn btn-primary" @click="saveGasto" :disabled="!gastoFrm.concepto||!gastoFrm.monto">
-          💾 Guardar Gasto
-        </button>
-      </div>
-    </div>
-  </div>
-  </div>
-
-
-  <!-- GRUPO MODAL -->
-
-  <!-- BANCA MODAL -->
-
-  <!-- PERÍODO MODAL -->
-
-  <!-- REPORTE IMPRIMIBLE -->
-
-  <div class="toast-container">
-    <div v-for="t in toasts" :key="t.id" :class="['toast', 'toast-' + t.type]">
-      {{ t.msg }}
-    </div>
-  </div>
-
-  </div>
 
       <!-- ═══════════════════════════════════════════════
            CAJA CENTRAL
       ════════════════════════════════════════════════ -->
-      <div v-if="view==='caja_central'">
+      <div v-if="view==='caja_central' && canView('caja_central')">
         <div class="section-header">
           <div>
-            <div class="section-title">🏧 Caja Central</div>
+            <div class="section-title">Caja Central</div>
             <div class="section-sub">Fondo físico en oficina — rastro de cada peso entre supervisores, oficina y banco</div>
           </div>
           <div style="display:flex;gap:10px;align-items:center">
@@ -4681,14 +5026,13 @@ onMounted(async () => {
 
       </div><!-- /caja_central -->
 
-
       <!-- ═══════════════════════════════════════════════
            CIERRE DE PERÍODOS
       ════════════════════════════════════════════════ -->
-      <div v-if="view==='cierre_periodo'">
+      <div v-if="view==='cierre_periodo' && canView('cierre_periodo')">
         <div class="section-header">
           <div>
-            <div class="section-title">🔒 Cierre de Períodos y Cuadre Mensual</div>
+            <div class="section-title">Cierre de Períodos</div>
             <div class="section-sub">Verifica, cuadra y cierra cada período. Concilia el saldo banco al final.</div>
           </div>
         </div>
@@ -4750,7 +5094,7 @@ onMounted(async () => {
                 <div v-else-if="cierreMesData">
                   <!-- Resumen del mes -->
                   <div style="display:flex;flex-direction:column;gap:8px">
-                    <div style="background:var(--bg-hover);border-radius:10px;padding:12px">
+                    <div style="background:var(--surface2);border-radius:10px;padding:12px">
                       <div style="font-size:12px;color:var(--muted);margin-bottom:8px">PERÍODOS DEL MES</div>
                       <div v-for="p in cierreMesData.periodos" :key="p.id" style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)">
                         <span>{{ p.descripcion || p.fecha_inicio }}</span>
@@ -4794,7 +5138,7 @@ onMounted(async () => {
             <!-- Instrucciones del proceso -->
             <div class="card" style="margin-top:16px">
               <div class="card-header"><div class="card-title">📋 Proceso de Cierre Recomendado</div></div>
-              <div style="padding:16px;font-size:13px;line-height:1.8;color:var(--text-muted)">
+              <div style="padding:16px;font-size:13px;line-height:1.8;color:var(--muted)">
                 <div style="margin-bottom:12px"><strong style="color:var(--text)">① Registrar entregas en Caja Central</strong><br>
                 Cada vez que un supervisor entregue, ir a Caja Central y registrar "Entrega de supervisor" con el grupo y período correspondiente.</div>
                 <div style="margin-bottom:12px"><strong style="color:var(--text)">② Registrar depósito al banco</strong><br>
@@ -4827,7 +5171,7 @@ onMounted(async () => {
               </div>
 
               <!-- Resumen del período -->
-              <div style="background:var(--bg-hover);border-radius:10px;padding:14px">
+              <div style="background:var(--surface2);border-radius:10px;padding:14px">
                 <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase">RESUMEN OPERACIONAL</div>
                 <div class="kv-row"><span>📦 Ventas</span><span class="pos">{{ fmt(cierrePeriodo.totalVentas) }}</span></div>
                 <div class="kv-row"><span>🎯 Premios</span><span class="neg">{{ fmt(cierrePeriodo.totalPremios) }}</span></div>
@@ -4838,7 +5182,7 @@ onMounted(async () => {
               </div>
 
               <!-- Efectivo -->
-              <div style="background:var(--bg-hover);border-radius:10px;padding:14px">
+              <div style="background:var(--surface2);border-radius:10px;padding:14px">
                 <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase">MOVIMIENTO DE EFECTIVO</div>
                 <div class="kv-row"><span>💰 Total depositado (cuadres)</span><span class="pos">{{ fmt(cierrePeriodo.totalDepositado) }}</span></div>
                 <div class="kv-row">
@@ -4888,7 +5232,7 @@ onMounted(async () => {
                 <textarea class="form-control" v-model="cierreFrm.notas" rows="2" placeholder="Observaciones, justificación de diferencias..."></textarea>
               </div>
 
-              <div style="font-size:12px;color:var(--muted);padding:8px 12px;background:var(--bg-hover);border-radius:8px">
+              <div style="font-size:12px;color:var(--muted);padding:8px 12px;background:var(--surface2);border-radius:8px">
                 📌 Al confirmar, el período quedará marcado como <strong>Cerrado</strong>. Si hay diferencia bancaria, se registra automáticamente un ajuste en Flujo de Efectivo.
               </div>
             </div>
@@ -4903,6 +5247,172 @@ onMounted(async () => {
 
       </div><!-- /cierre_periodo -->
 
+    </div><!-- /content -->
+    </main>
+
+      <!-- ══ MODALS ══ -->
+
+  <!-- GASTO MODAL -->
+  <div class="overlay" v-if="showGastoModal" @click.self="showGastoModal=false">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">{{ gastoEditId ? "✏️ Editar Gasto" : "💸 Registrar Gasto" }}</div>
+        <button class="close-btn" @click="showGastoModal=false">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Período</label>
+              <select class="form-control" v-model="gastoFrm.periodo_id">
+                <option value="">— Período —</option>
+                <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha</label>
+              <input type="date" class="form-control" v-model="gastoFrm.fecha"/>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Grupo</label>
+              <select class="form-control" v-model="gastoFrm.grupo_id" @change="gastoFrm.banca_id=''">
+                <option value="">— Grupo (opcional) —</option>
+                <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">
+                Banca
+                <span v-if="gastoFrm.tipo==='operativo'" style="color:var(--blue);font-size:9px;margin-left:4px">
+                  ★ asigna al cuadre
+                </span>
+              </label>
+              <select class="form-control"
+                :style="gastoFrm.tipo==='operativo' && !gastoFrm.banca_id ? 'border-color:rgba(76,201,240,0.6)' : ''"
+                v-model="gastoFrm.banca_id">
+                <option value="">{{ gastoFrm.tipo==='operativo' ? '— Sin banca (va a total del grupo) —' : '— Banca (opcional) —' }}</option>
+                <option v-for="b in (gastoFrm.grupo_id ? bancas.filter(b=>b.grupo_id===gastoFrm.grupo_id) : bancas)"
+                        :key="b.id" :value="b.id">{{ b.codigo }} — {{ b.nombre }}</option>
+              </select>
+            </div>
+          </div>
+          <!-- Tip contextual según tipo -->
+          <div v-if="gastoFrm.tipo==='operativo'" class="alert alert-info" style="font-size:11px;padding:8px 12px">
+            💡 <strong>Operativo</strong> — Este gasto <strong>aparecerá en el cuadre</strong> del supervisor y se descontará del resultado.
+            <span v-if="!gastoFrm.banca_id"> Sin banca: se descuenta del total del grupo.</span>
+            <span v-else> Se asignará a la banca seleccionada.</span>
+          </div>
+          <div v-else-if="gastoFrm.tipo==='central'" class="alert" style="font-size:11px;padding:8px 12px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);color:var(--yellow)">
+            🏢 <strong>Central</strong> — Gasto de administración central. <strong>No aparece en cuadres de supervisores.</strong>
+          </div>
+          <div class="form-row">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Categoría de Gasto</label>
+              <select class="form-control" v-model="gastoFrm.categoria_id">
+                <option value="">— Seleccionar categoría —</option>
+                <option v-for="c in categorias.filter(c=>c.tipo==='egreso'&&c.activo)" :key="c.id" :value="c.id">
+                  {{ c.nombre }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tipo de Gasto</label>
+              <select class="form-control" v-model="gastoFrm.tipo">
+                <option value="operativo">Operativo</option>
+                <option value="central">Central</option>
+                <option value="sistema">Sistema</option>
+                <option value="equipo">Equipo</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Monto</label>
+              <input type="number" class="form-control" v-model.number="gastoFrm.monto" placeholder="0"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Concepto / Descripción</label>
+            <input type="text" class="form-control" v-model="gastoFrm.concepto" placeholder="Ej: Pago internet banca 3005"/>
+          </div>
+        </div>
+      </div>
+      <!-- Propagación cruzada -->
+      <div style="padding:0 24px 16px;border-top:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;margin-top:12px;text-transform:uppercase;letter-spacing:0.5px">
+          🔗 {{ gastoEditId ? 'Sincronizar registros vinculados' : 'Registrar también en:' }}
+        </div>
+
+        <!-- CREAR: checkboxes para propagar -->
+        <div v-if="!gastoEditId" style="display:flex;flex-direction:column;gap:10px">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="gastoPropagarBanco?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
+            <input type="checkbox" v-model="gastoPropagarBanco" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
+            <div>
+              <div style="font-weight:600;font-size:13px">🏦 Cuenta Bancaria</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Se registra como egreso en Banco. Copia grupo, período, categoría.</div>
+            </div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="gastoPropagarFlujo?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
+            <input type="checkbox" v-model="gastoPropagarFlujo" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
+            <div>
+              <div style="font-weight:600;font-size:13px">💸 Flujo de Efectivo</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Se registra como egreso en Flujo. Copia grupo, período, categoría.</div>
+            </div>
+          </label>
+        </div>
+
+        <!-- EDITAR: sincronizar cambios a registros vinculados existentes -->
+        <div v-else style="display:flex;flex-direction:column;gap:10px">
+          <label v-if="gastoTieneRefBanco" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="gastoSincBanco?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
+            <input type="checkbox" v-model="gastoSincBanco" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
+            <div>
+              <div style="font-weight:600;font-size:13px">🏦 Actualizar registro en Banco</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Sincroniza monto, concepto, fecha y categoría al registro vinculado en Banco.</div>
+            </div>
+          </label>
+          <label v-if="gastoTieneRefFlujo" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 12px;border-radius:8px;border:1px solid var(--border);" :style="gastoSincFlujo?'border-color:rgba(26,115,232,0.4);background:rgba(26,115,232,0.05)':''">
+            <input type="checkbox" v-model="gastoSincFlujo" style="margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0"/>
+            <div>
+              <div style="font-weight:600;font-size:13px">💸 Actualizar registro en Flujo</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Sincroniza monto, concepto, fecha, grupo, período y categoría al registro vinculado en Flujo.</div>
+            </div>
+          </label>
+          <div v-if="!gastoTieneRefBanco && !gastoTieneRefFlujo" style="font-size:12px;color:var(--muted);padding:8px 12px;background:var(--surface2);border-radius:8px">
+            Este gasto no tiene registros vinculados en Banco ni en Flujo.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" @click="showGastoModal=false">Cancelar</button>
+        <button class="btn btn-primary" @click="saveGasto" :disabled="!gastoFrm.concepto||!gastoFrm.monto">
+          💾 Guardar Gasto
+        </button>
+      </div>
+    </div>
+  </div>
+  </div>
+
+
+  <!-- GRUPO MODAL -->
+
+  <!-- BANCA MODAL -->
+
+  <!-- PERÍODO MODAL -->
+
+  <!-- REPORTE IMPRIMIBLE -->
+
+  <div class="toast-container">
+    <div v-for="t in toasts" :key="t.id" :class="['toast', 'toast-' + t.type]">
+      {{ t.msg }}
+    </div>
+  </div>
+
+  </div>
+
     <!-- /APP PRINCIPAL -->
 
 
@@ -4914,6 +5424,35 @@ onMounted(async () => {
 /* ── Drawer slide-in animation ── */
 .drawer-fade-enter-active { transition: opacity 0.22s ease; }
 .drawer-fade-leave-active { transition: opacity 0.18s ease; }
+
+/* ── Docs collapsible ── */
+.docs-hdr { display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;user-select:none;transition:background 0.15s; }
+.docs-hdr:hover { background:rgba(26,115,232,0.04); }
+.docs-hdr.open { background:rgba(26,115,232,0.06); }
+.docs-title { font-weight:700;font-size:14px; }
+.docs-sub { font-size:11px;color:var(--muted);margin-top:1px; }
+.docs-arrow { font-size:18px;color:var(--muted);transition:transform 0.25s;display:inline-block; }
+.docs-arrow.rotated { transform:rotate(180deg); }
+.docs-intro { color:var(--muted);margin-bottom:16px;font-size:13px;line-height:1.7; }
+.docs-col-label { font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;font-weight:700; }
+.docs-box { border-radius:8px;padding:14px;font-size:12px; }
+.docs-box-title { font-weight:700;font-size:13px;margin-bottom:10px; }
+.docs-box-green { background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2); }
+.docs-box-blue  { background:rgba(76,201,240,0.06);border:1px solid rgba(76,201,240,0.2); }
+.docs-box-yellow{ background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25); }
+.docs-box-red   { background:rgba(255,77,109,0.06);border:1px solid rgba(255,77,109,0.2); }
+.docs-note { border-radius:8px;padding:14px;font-size:12px;line-height:1.8; }
+.docs-note-accent { background:rgba(26,115,232,0.06);border-left:3px solid var(--accent); }
+.docs-note-surface{ background:var(--surface2);border:1px solid var(--border); }
+.docs-pill { background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 10px;flex:1;min-width:150px; }
+.docs-eq-box { background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px; }
+.docs-eq-op { font-size:18px;color:var(--muted); }
+.docs-step { background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px; }
+.docs-step-t { font-size:11px;font-weight:700;color:var(--c,var(--accent));margin-top:4px; }
+.docs-step-d { font-size:10px;color:var(--muted);margin-top:4px; }
+.docs-collapse-enter-active { transition: all 0.28s ease; max-height:2000px; overflow:hidden; }
+.docs-collapse-leave-active { transition: all 0.22s ease; max-height:2000px; overflow:hidden; }
+.docs-collapse-enter-from, .docs-collapse-leave-to { max-height:0; opacity:0; }
 .drawer-fade-enter-from   { opacity: 0; }
 .drawer-fade-leave-to     { opacity: 0; }
 .drawer-fade-enter-active :deep(div:last-child),

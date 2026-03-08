@@ -36,7 +36,7 @@ export function useGastos() {
       const k = g.categoria_id || '__sin__'
       if (!map[k]) map[k] = {
         nombre: g.categorias?.nombre || 'Sin categoría',
-        color:  g.categorias?.color  || '#5a6a80',
+        color:  g.categorias?.color  || '#c9d1d9',
         total:  0, count: 0
       }
       map[k].total += g.monto || 0

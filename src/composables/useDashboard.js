@@ -155,7 +155,7 @@ export function useDashboard() {
     for (const m of flujoEgr) {
       const k = m.categoria_id || '__sin__';
       const n = m.categorias?.nombre || 'Sin Categoría';
-      const c = m.categorias?.color || '#5a6a80';
+      const c = m.categorias?.color || '#c9d1d9';
       if (!flujoCatMap[k]) flujoCatMap[k] = { nombre: n, color: c, total: 0 };
       flujoCatMap[k].total += m.monto;
     }
@@ -206,14 +206,14 @@ export function useDashboard() {
         const c = catPartMatch || categorias.value.find(c=>c.nombre?.toLowerCase().includes('participac'));
         return c ? { id: c.id, nombre: c.nombre, color: c.color } : { nombre: 'Participación', color: '#ffd166' };
       }
-      return { nombre: 'Sin Categoría', color: '#5a6a80' };
+      return { nombre: 'Sin Categoría', color: '#c9d1d9' };
     };
     const catMap = {};
     for (const g of gastos) {
       const cat   = g.categorias || catFallback(g);
       const key   = g.categoria_id || ('__tipo_' + g.tipo);
       const label = cat.nombre;
-      const color = cat.color || '#5a6a80';
+      const color = cat.color || '#c9d1d9';
       if (!catMap[key]) catMap[key] = { nombre: label, color, total: 0 };
       catMap[key].total += g.monto || 0;
     }
@@ -236,9 +236,9 @@ export function useDashboard() {
 
   function renderDashCharts() {
     const isDarkMode = isDark.value;
-    const gridColor = isDarkMode ? '#1e2a3a' : '#e8ecf2';
-    const tickColor = isDarkMode ? '#5a6a80' : '#7a8a9a';
-    const font = { family: 'DM Mono', size: 11 };
+    const gridColor = isDarkMode ? '#21262d' : '#e2e6ec';
+    const tickColor = isDarkMode ? '#c9d1d9' : '#4a5568';
+    const font = { family: 'Inter', size: 11 };
 
     // Chart 1: Ventas vs Premios por grupo
     const c1 = document.getElementById('chartBar');
@@ -275,7 +275,8 @@ export function useDashboard() {
             borderWidth: 0, hoverOffset: 6 }]
         },
         options: { responsive: true, maintainAspectRatio: false, cutout: '68%',
-          plugins: { legend: { position: 'bottom', labels: { color: tickColor, font, padding: 12 } } }
+          color: tickColor,
+          plugins: { legend: { position: 'bottom', labels: { color: tickColor, font, padding: 12, boxWidth: 12 } } }
         }
       });
     }
@@ -327,9 +328,9 @@ export function useDashboard() {
   function renderFlujoKpiCharts() {
     const k         = dashKpis.value;
     const isDarkMode= isDark.value;
-    const grid      = isDarkMode ? '#1e2a3a' : '#e8ecf2';
-    const tick      = isDarkMode ? '#5a6a80' : '#7a8a9a';
-    const font      = { family: 'DM Mono', size: 10 };
+    const grid      = isDarkMode ? '#21262d' : '#e2e6ec';
+    const tick      = isDarkMode ? '#c9d1d9' : '#4a5568';
+    const font      = { family: 'Inter', size: 10 };
     const dias      = k.flujoDias  || [];
     const labDias   = dias.map(d => d.substring(5)); // MM-DD
 
@@ -389,6 +390,7 @@ export function useDashboard() {
           }]
         },
         options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+          color: tick,
           plugins:{ legend:{ position:'bottom', labels:{ color:tick, font, padding:10, boxWidth:10 } } }
         }
       });
@@ -403,7 +405,7 @@ export function useDashboard() {
         type: 'bar',
         data: { labels: cats.map(c=>c.nombre), datasets:[{
           label:'Egresos RD$', data: cats.map(c=>c.total),
-          backgroundColor: cats.map(c=>(c.color||'#5a6a80')+'bb'),
+          backgroundColor: cats.map(c=>(c.color||'#c9d1d9')+'bb'),
           borderRadius:4
         }]},
         options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
@@ -419,33 +421,55 @@ export function useDashboard() {
 
   function renderGastosCharts() {
     const isDarkMode = isDark.value;
-    const gridColor  = isDarkMode ? '#1e2a3a' : '#e8ecf2';
-    const tickColor  = isDarkMode ? '#5a6a80' : '#7a8a9a';
-    const font       = { family: 'DM Mono', size: 11 };
+    const gridColor  = isDarkMode ? '#21262d' : '#e2e6ec';
+    const tickColor  = isDarkMode ? '#c9d1d9' : '#4a5568';
+    const font       = { family: 'Inter', size: 11 };
     const cats       = dashGastosCat.value;
     if (!cats || !cats.length) return;
 
     const labels = cats.map(c => c.nombre);
     const totals = cats.map(c => c.total);
-    const colors = cats.map(c => c.color || '#5a6a80');
+    const colors = cats.map(c => c.color || '#c9d1d9');
     const bgColors = colors.map(c => c + 'cc');
 
     // Chart A: Donut por categoría
     const cA = document.getElementById('chartGastoCat');
     if (cA) {
       if (gastoCatChart) gastoCatChart.destroy();
+      const lblColor = tickColor;
       gastoCatChart = new Chart(cA, {
         type: 'doughnut',
         data: { labels, datasets: [{ data: totals, backgroundColor: bgColors, borderWidth: 0, hoverOffset: 8 }] },
-        options: { responsive: true, maintainAspectRatio: false, cutout: '60%',
-          plugins: { legend: { position: 'right', labels: { color: tickColor, font, padding: 10, boxWidth: 12,
-            generateLabels: chart => chart.data.labels.map((l,i) => ({
-              text: l + '  $' + (chart.data.datasets[0].data[i]/1000).toFixed(1) + 'K',
-              fillStyle: chart.data.datasets[0].backgroundColor[i],
-              strokeStyle: 'transparent', index: i
-            }))
-          }}}
-        }
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '60%',
+          plugins: {
+            legend: { display: false }
+          }
+        },
+        plugins: [{
+          id: 'customLegend',
+          afterDraw(chart) {
+            const ctx  = chart.ctx;
+            const data = chart.data.datasets[0].data;
+            const bg   = chart.data.datasets[0].backgroundColor;
+            const lbs  = chart.data.labels;
+            const ca   = chart.chartArea;
+            const startX = ca.right + 10;
+            const lineH  = 22;
+            const startY = (ca.top + ca.bottom) / 2 - (lbs.length * lineH) / 2 + 10;
+            ctx.save();
+            ctx.font = '11px Inter, sans-serif';
+            lbs.forEach((label, i) => {
+              const y = startY + i * lineH;
+              ctx.fillStyle = bg[i];
+              ctx.fillRect(startX, y - 8, 11, 11);
+              ctx.fillStyle = lblColor;
+              ctx.textBaseline = 'middle';
+              ctx.fillText(label + '  $' + (data[i] / 1000).toFixed(1) + 'K', startX + 16, y);
+            });
+            ctx.restore();
+          }
+        }]
       });
     }
 
@@ -459,7 +483,7 @@ export function useDashboard() {
         data: { labels: top.map(c=>c.nombre), datasets: [{
           label: 'Gasto RD$',
           data: top.map(c=>c.total),
-          backgroundColor: top.map(c=>(c.color||'#5a6a80')+'bb'),
+          backgroundColor: top.map(c=>(c.color||'#c9d1d9')+'bb'),
           borderRadius: 4
         }]},
         options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',

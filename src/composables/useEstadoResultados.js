@@ -115,7 +115,7 @@ export function useEstadoResultados() {
     const gastos_x_categoria = Object.values(
       gastosOp.reduce((m,g)=>{
         const k = g.categorias?.nombre || g.tipo || 'Sin categoría';
-        if (!m[k]) m[k] = { nombre: k, total: 0, color: g.categorias?.color || '#5a6a80' };
+        if (!m[k]) m[k] = { nombre: k, total: 0, color: g.categorias?.color || '#c9d1d9' };
         m[k].total += g.monto;
         return m;
       }, {})
@@ -384,7 +384,7 @@ export function useEstadoResultados() {
     // Gastos por categoría
     const gastoPorCat = Object.values(gastosOp.reduce((m,g)=>{
       const k = g.categorias?.nombre || 'Otros'
-      const col = g.categorias?.color || '#5a6a80'
+      const col = g.categorias?.color || '#c9d1d9'
       if (!m[k]) m[k] = { label: k, monto: 0, color: col }
       m[k].monto += g.monto
       return m
@@ -397,7 +397,7 @@ export function useEstadoResultados() {
     // ── FLUJO BANCARIO POR CATEGORÍA ──
     const flujoPorCat = Object.values(flujoMovs.reduce((m,f)=>{
       const k = f.categorias?.nombre || (f.tipo === 'ingreso' ? 'Ingresos varios' : 'Egresos varios')
-      const col = f.categorias?.color || '#5a6a80'
+      const col = f.categorias?.color || '#c9d1d9'
       if (!m[k]) m[k] = { label: k, ingresos: 0, egresos: 0, color: col }
       if (f.tipo === 'ingreso') m[k].ingresos += f.monto
       else m[k].egresos += f.monto

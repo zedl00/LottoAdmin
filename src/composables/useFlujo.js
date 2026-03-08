@@ -59,7 +59,7 @@ export function useFlujo() {
         id: k,
         nombre: m.categorias?.nombre || 'Sin categoría',
         tipo: m.tipo,
-        color: m.categorias?.color || '#5a6a80',
+        color: m.categorias?.color || '#c9d1d9',
         total: 0
       };
       map[k].total += m.monto;
@@ -168,10 +168,10 @@ export function useFlujo() {
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#5a6a80', font: { family: 'DM Mono', size: 11 } } } },
+        plugins: { legend: { labels: { color: '#c9d1d9', font: { family: 'Inter', size: 11 } } } },
         scales: {
-          x: { grid: { color: '#1e2a3a' }, ticks: { color: '#5a6a80', font: { family: 'DM Mono' } } },
-          y: { grid: { color: '#1e2a3a' }, ticks: { color: '#5a6a80', font: { family: 'DM Mono' },
+          x: { grid: { color: '#21262d' }, ticks: { color: '#c9d1d9', font: { family: 'Inter' } } },
+          y: { grid: { color: '#21262d' }, ticks: { color: '#c9d1d9', font: { family: 'Inter' },
             callback: v => '$' + (v/1000).toFixed(0) + 'K' } }
         }
       }
