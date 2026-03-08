@@ -1,0 +1,203 @@
+      <div v-if="view==='estado_resultados'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">📑 Estado de Resultados (P&L)</div>
+            <div class="section-sub">Reporte de ganancias y pérdidas — por período, mes o banca</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <select class="form-control" style="width:180px" v-model="erFiltro.periodo_id" @change="loadEstadoResultados">
+              <option value="">— Todos los períodos —</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+            </select>
+            <select class="form-control" style="width:160px" v-model="erFiltro.grupo_id" @change="loadEstadoResultados">
+              <option value="">Todos los grupos</option>
+              <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+            </select>
+            <button class="btn btn-ghost" @click="loadEstadoResultados">↺ Actualizar</button>
+            <button class="btn-export excel" @click="exportERExcel()">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="printER()">⬇ PDF / Imprimir</button>
+          </div>
+        </div>
+
+        <div v-if="loadingER" style="text-align:center;padding:40px;color:var(--muted)">Calculando...</div>
+        <div v-else-if="!erData">
+          <div class="empty"><div class="empty-icon">📑</div><p>Selecciona un período para generar el estado de resultados</p></div>
+        </div>
+        <div v-else id="erContent">
+          <!-- Título del reporte -->
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-body" style="text-align:center;padding:20px">
+              <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)">Estado de Resultados</div>
+              <div style="font-family:var(--font-h);font-size:20px;font-weight:800;margin:6px 0">
+                {{ erFiltro.grupo_id ? grupos.find(g=>g.id===erFiltro.grupo_id)?.nombre : 'GLOBAL — TODOS LOS GRUPOS' }}
+              </div>
+              <div style="font-size:13px;color:var(--accent)">
+                {{ erFiltro.periodo_id ? periodos.find(p=>p.id===erFiltro.periodo_id)?.descripcion : 'Todos los períodos' }}
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Generado: {{ new Date().toLocaleDateString('es-DO',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) }}</div>
+            </div>
+          </div>
+
+          <!-- SECCIÓN I: INGRESOS BRUTOS -->
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header" style="background:rgba(0,229,160,0.07)">
+              <div class="card-title" style="color:var(--accent)">I. INGRESOS BRUTOS DE LOTERÍA</div>
+            </div>
+            <div class="card-body">
+              <div class="kv-row"><span class="kv-label">Total Ventas de Lotería</span><span class="kv-value num-pos">{{ fmt(erData.ventas_total) }}</span></div>
+              <div class="kv-row" v-if="erData.recargas_total"><span class="kv-label">Recargas y Servicios</span><span class="kv-value num-pos">{{ fmt(erData.recargas_total) }}</span></div>
+              <div class="kv-row kv-total"><span class="kv-label"><strong>TOTAL INGRESOS BRUTOS</strong></span><span class="kv-value num-pos"><strong>{{ fmt(erData.ingresos_brutos) }}</strong></span></div>
+            </div>
+          </div>
+
+          <!-- SECCIÓN II: COSTO DE VENTAS -->
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header" style="background:rgba(255,77,109,0.05)">
+              <div class="card-title" style="color:var(--red)">II. COSTO DE VENTAS (PREMIOS Y COMISIONES)</div>
+            </div>
+            <div class="card-body">
+              <div class="kv-row"><span class="kv-label">(-) Premios Pagados a Apostadores</span><span class="kv-value num-neg">{{ fmt(erData.premios_total) }}</span></div>
+              <div class="kv-row"><span class="kv-label">(-) Comisiones a Vendedores</span><span class="kv-value num-neg">{{ fmt(erData.comisiones_total) }}</span></div>
+              <div class="kv-row kv-total"><span class="kv-label"><strong>TOTAL COSTO DE VENTAS</strong></span><span class="kv-value num-neg"><strong>{{ fmt(erData.costo_ventas) }}</strong></span></div>
+              <div class="divider"></div>
+              <div class="kv-row kv-total" style="background:rgba(0,229,160,0.07)">
+                <span class="kv-label"><strong>MARGEN BRUTO DE LOTERÍA</strong></span>
+                <span :class="['kv-value', erData.margen_bruto>=0?'num-pos':'num-neg']"><strong>{{ fmt(erData.margen_bruto) }}</strong></span>
+              </div>
+              <div class="kv-row"><span class="kv-label">Margen % sobre ventas</span><span class="kv-value" style="color:var(--yellow)">{{ erData.margen_pct }}%</span></div>
+            </div>
+          </div>
+
+          <!-- SECCIÓN III: GASTOS OPERATIVOS -->
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header" style="background:rgba(255,209,102,0.05)">
+              <div class="card-title" style="color:var(--yellow)">III. GASTOS OPERATIVOS</div>
+            </div>
+            <div class="card-body">
+              <div class="kv-row" v-for="g in erData.gastos_x_categoria" :key="g.nombre">
+                <span class="kv-label">(-) {{ g.nombre }}</span>
+                <span class="kv-value num-neg">{{ fmt(g.total) }}</span>
+              </div>
+              <div v-if="!erData.gastos_x_categoria.length" style="color:var(--muted);font-size:11px;padding:8px 0">Sin gastos registrados</div>
+              <div class="kv-row kv-total"><span class="kv-label"><strong>TOTAL GASTOS OPERATIVOS</strong></span><span class="kv-value num-neg"><strong>{{ fmt(erData.gastos_total) }}</strong></span></div>
+              <div class="divider"></div>
+              <div class="kv-row kv-total" style="background:rgba(0,229,160,0.07)">
+                <span class="kv-label"><strong>RESULTADO OPERATIVO (EBITDA)</strong></span>
+                <span :class="['kv-value', erData.ebitda>=0?'num-pos':'num-neg']"><strong>{{ fmt(erData.ebitda) }}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECCIÓN IV: PARTICIPACIONES -->
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header" style="background:rgba(255,209,102,0.05)">
+              <div class="card-title" style="color:var(--yellow)">IV. PARTICIPACIONES PAGADAS A SUPERVISORES</div>
+            </div>
+            <div class="card-body">
+              <div class="kv-row" v-for="g in erData.participaciones_x_grupo" :key="g.grupo">
+                <span class="kv-label">(-) {{ g.grupo }} ({{ g.pct }}%)</span>
+                <span class="kv-value num-neg">{{ fmt(g.total) }}</span>
+              </div>
+              <div v-if="!erData.participaciones_x_grupo.length" style="color:var(--muted);font-size:11px;padding:8px 0">Sin participaciones</div>
+              <div class="kv-row kv-total"><span class="kv-label"><strong>TOTAL PARTICIPACIONES</strong></span><span class="kv-value num-neg"><strong>{{ fmt(erData.participaciones_total) }}</strong></span></div>
+              <div class="divider"></div>
+              <div class="kv-row kv-total" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.2)">
+                <span class="kv-label"><strong>RESULTADO NETO ANTES DE BALANCES PENDIENTES</strong></span>
+                <span :class="['kv-value', erData.resultado_neto>=0?'num-pos':'num-neg']"><strong>{{ fmt(erData.resultado_neto) }}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECCIÓN V: BALANCES Y EFECTIVO -->
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header" style="background:rgba(76,201,240,0.05)">
+              <div class="card-title" style="color:var(--blue)">V. MOVIMIENTOS DE EFECTIVO</div>
+            </div>
+            <div class="card-body">
+              <div class="kv-row"><span class="kv-label">Total depositado/entregado a central</span><span class="kv-value num-pos">{{ fmt(erData.depositado_total) }}</span></div>
+              <div class="kv-row"><span class="kv-label">Balance pendiente (suma todos los grupos)</span><span :class="['kv-value', erData.balance_pendiente_total>=0?'':'num-neg']">{{ fmt(erData.balance_pendiente_total) }}</span></div>
+              <div class="kv-row"><span class="kv-label">Préstamos otorgados en el período</span><span class="kv-value num-neg">{{ fmt(erData.prestamos_otorgados) }}</span></div>
+              <div class="kv-row"><span class="kv-label">Devoluciones de préstamos</span><span class="kv-value num-pos">{{ fmt(erData.prestamos_devueltos) }}</span></div>
+            </div>
+          </div>
+
+          <!-- SECCIÓN VI: RESUMEN POR GRUPO -->
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header">
+              <div class="card-title">VI. DETALLE POR GRUPO</div>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Grupo</th><th style="text-align:right">Ventas</th><th style="text-align:right">Premios</th>
+                      <th style="text-align:right">Comisión</th><th style="text-align:right">Gastos</th>
+                      <th style="text-align:right">Participación</th><th style="text-align:right">Resultado</th>
+                      <th style="text-align:right">Depositado</th><th style="text-align:right">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="g in erData.detalle_grupos" :key="g.grupo_id">
+                      <td><strong>{{ g.nombre }}</strong></td>
+                      <td style="text-align:right" class="num-pos">{{ fmt(g.ventas) }}</td>
+                      <td style="text-align:right" class="num-neg">{{ fmt(g.premios) }}</td>
+                      <td style="text-align:right" class="num-neg">{{ fmt(g.comisiones) }}</td>
+                      <td style="text-align:right" class="num-neg">{{ fmt(g.gastos) }}</td>
+                      <td style="text-align:right" style="color:var(--yellow)">{{ fmt(g.participacion) }}</td>
+                      <td style="text-align:right" :class="g.resultado>=0?'num-pos':'num-neg'"><strong>{{ fmt(g.resultado) }}</strong></td>
+                      <td style="text-align:right" class="num-pos">{{ fmt(g.depositado) }}</td>
+                      <td style="text-align:right" :class="g.balance>=0?'num-pos':'num-neg'">{{ fmt(g.balance) }}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="summary-row">
+                      <td><strong>TOTAL</strong></td>
+                      <td style="text-align:right">{{ fmt(erData.ventas_total) }}</td>
+                      <td style="text-align:right">{{ fmt(erData.premios_total) }}</td>
+                      <td style="text-align:right">{{ fmt(erData.comisiones_total) }}</td>
+                      <td style="text-align:right">{{ fmt(erData.gastos_total) }}</td>
+                      <td style="text-align:right">{{ fmt(erData.participaciones_total) }}</td>
+                      <td style="text-align:right">{{ fmt(erData.resultado_neto) }}</td>
+                      <td style="text-align:right">{{ fmt(erData.depositado_total) }}</td>
+                      <td style="text-align:right">{{ fmt(erData.balance_pendiente_total) }}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- RESUMEN FINAL -->
+          <div class="card" style="border:2px solid var(--accent)">
+            <div class="card-header" style="background:rgba(0,229,160,0.1)">
+              <div class="card-title" style="color:var(--accent);font-size:16px">✅ RESUMEN EJECUTIVO</div>
+            </div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;text-align:center">
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Ingresos Brutos</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--accent)">{{ fmt(erData.ingresos_brutos) }}</div>
+                </div>
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Costo de Ventas</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--red)">{{ fmt(erData.costo_ventas) }}</div>
+                </div>
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Gastos Oper.</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--yellow)">{{ fmt(erData.gastos_total) }}</div>
+                </div>
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Participaciones</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--yellow)">{{ fmt(erData.participaciones_total) }}</div>
+                </div>
+                <div style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:8px;padding:12px">
+                  <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">RESULTADO NETO</div>
+                  <div style="font-size:22px;font-weight:800" :style="erData.resultado_neto>=0?'color:var(--accent)':'color:var(--red)'">{{ fmt(erData.resultado_neto) }}</div>
+                  <div style="font-size:10px;color:var(--muted)">{{ erData.margen_pct }}% margen</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>

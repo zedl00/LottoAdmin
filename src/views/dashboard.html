@@ -1,0 +1,341 @@
+      <div v-if="view==='dashboard'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Dashboard</div>
+            <div class="section-sub">Indicadores generales — período activo</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-control" style="width:200px" v-model="selectedPeriodoId" @change="loadDashboard">
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" @click="toggleTheme" :title="'Modo: '+themeMode" style="font-size:16px;padding:6px 10px">
+              {{ themeMode==='dark' ? '🌙' : themeMode==='light' ? '☀️' : '🌓' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- ── ROW 1: KPIs principales ── -->
+        <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="metric-card blue">
+            <div class="metric-icon">🎰</div>
+            <div class="metric-label">Total Ventas</div>
+            <div class="metric-value">{{ fmt(dashStats.ventas) }}</div>
+            <div class="metric-sub">{{ dashStats.bancas_activas }} bancas activas</div>
+          </div>
+          <div class="metric-card red">
+            <div class="metric-icon">🏆</div>
+            <div class="metric-label">Total Premios</div>
+            <div class="metric-value neg">{{ fmt(dashStats.premios) }}</div>
+            <div class="metric-sub">{{ pct(dashStats.premios, dashStats.ventas) }} de ventas</div>
+          </div>
+          <div class="metric-card yellow">
+            <div class="metric-icon">💼</div>
+            <div class="metric-label">Comisiones</div>
+            <div class="metric-value" style="color:var(--yellow)">{{ fmt(dashStats.comisiones) }}</div>
+            <div class="metric-sub">{{ pct(dashStats.comisiones, dashStats.ventas) }} de ventas</div>
+          </div>
+          <div :class="['metric-card', dashStats.resultado >= 0 ? 'green' : 'red']">
+            <div class="metric-icon">📊</div>
+            <div class="metric-label">Resultado Neto</div>
+            <div :class="['metric-value', dashStats.resultado >= 0 ? 'pos' : 'neg']">{{ fmt(dashStats.resultado) }}</div>
+            <div class="metric-sub">Ventas − Premios − Comisiones</div>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:12px"></div>
+
+        <!-- ── ROW 2: KPIs secundarios ── -->
+        <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="metric-card" style="border-color:rgba(255,77,109,0.3)">
+            <div class="metric-icon">📋</div>
+            <div class="metric-label">Gastos del Período</div>
+            <div class="metric-value neg">{{ fmt(dashKpis.gastos) }}</div>
+            <div class="metric-sub">Operativos + Participación</div>
+          </div>
+          <div :class="['metric-card', dashKpis.flujoNeto >= 0 ? 'green' : 'red']">
+            <div class="metric-icon">💵</div>
+            <div class="metric-label">Flujo Neto (total)</div>
+            <div :class="['metric-value', dashKpis.flujoNeto >= 0 ? 'pos' : 'neg']">{{ fmt(dashKpis.flujoNeto) }}</div>
+            <div class="metric-sub">Ing {{ fmt(dashKpis.flujoIngresos) }} / Egr {{ fmt(dashKpis.flujoEgresos) }}</div>
+          </div>
+          <div class="metric-card blue">
+            <div class="metric-icon">🏦</div>
+            <div class="metric-label">Saldo Banco</div>
+            <div :class="['metric-value', dashKpis.saldoBanco >= 0 ? 'pos' : 'neg']">{{ fmt(dashKpis.saldoBanco) }}</div>
+            <div class="metric-sub">Cuenta bancaria acumulado</div>
+          </div>
+          <div class="metric-card yellow">
+            <div class="metric-icon">📈</div>
+            <div class="metric-label">Participación</div>
+            <div class="metric-value" style="color:var(--yellow)">{{ fmt(dashKpis.participacionTotal) }}</div>
+            <div class="metric-sub">Pagado: {{ fmt(dashKpis.participacionPagada) }}</div>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 3: Tabla grupos + Donut ── -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Resultado por Grupo</div>
+              <div style="font-size:10px;color:var(--muted)">▼ = detalle de bancas</div>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="loading" v-if="loadingDash"><div class="spinner"></div></div>
+              <div class="empty" v-else-if="!grupoCuadres.length">
+                <div class="empty-icon">📋</div><p>Sin datos para este período</p>
+              </div>
+              <table v-else>
+                <thead><tr>
+                  <th>Grupo</th><th style="text-align:right">Ventas</th>
+                  <th style="text-align:right">Premios</th><th style="text-align:right">Resultado</th><th>Estado</th>
+                </tr></thead>
+                <tbody>
+                  <template v-for="g in grupoCuadres" :key="g.id">
+                    <tr>
+                      <td>
+                        <strong>{{ g.grupos?.nombre }}</strong>
+                        <span v-if="g.modo==='individual_bancas'" class="tag tag-yellow" style="font-size:9px;margin-left:4px">🏦</span>
+                        <button v-if="g.modo==='individual_bancas' && (dashGruposBancas[g.id]||[]).length"
+                          class="btn btn-ghost btn-xs" style="padding:1px 5px;margin-left:4px;font-size:10px"
+                          @click="dashExpandido[g.id]=!dashExpandido[g.id]">
+                          {{ dashExpandido[g.id] ? '▲' : '▼' }}
+                        </button>
+                      </td>
+                      <td style="text-align:right" class="num-pos">{{ fmt(g.total_ventas) }}</td>
+                      <td style="text-align:right" class="num-neg">{{ fmt(g.total_premios) }}</td>
+                      <td style="text-align:right" :class="g.resultado_loteria >= 0 ? 'num-pos' : 'num-neg'">{{ fmt(g.resultado_loteria) }}</td>
+                      <td><span :class="g.resultado_loteria >= 0 ? 'tag tag-green' : 'tag tag-red'">{{ g.resultado_loteria >= 0 ? 'Ganancia' : 'Pérdida' }}</span></td>
+                    </tr>
+                    <template v-if="g.modo==='individual_bancas' && dashExpandido[g.id]">
+                      <tr v-for="b in (dashGruposBancas[g.id]||[])" :key="b.banca_id"
+                          style="background:rgba(255,209,102,0.06);font-size:12px">
+                        <td style="padding-left:26px;color:var(--muted)">
+                          ↳ <span class="tag tag-yellow" style="font-size:9px">{{ b.codigo }}</span> {{ b.nombre }}
+                        </td>
+                        <td style="text-align:right;color:var(--blue)">{{ fmt(b.ventas) }}</td>
+                        <td style="text-align:right;color:var(--red)">{{ fmt(b.premios) }}</td>
+                        <td style="text-align:right" :class="b.resultado >= 0 ? 'num-pos' : 'num-neg'">{{ fmt(b.resultado) }}</td>
+                        <td><span :class="b.resultado >= 0 ? 'tag tag-green' : 'tag tag-red'" style="font-size:9px">{{ b.resultado >= 0 ? '✓' : '✗' }}</span></td>
+                      </tr>
+                    </template>
+                  </template>
+                </tbody>
+                <tfoot v-if="grupoCuadres.length">
+                  <tr class="summary-row">
+                    <td><strong>TOTAL</strong></td>
+                    <td style="text-align:right" class="num-pos"><strong>{{ fmt(dashStats.ventas) }}</strong></td>
+                    <td style="text-align:right" class="num-neg"><strong>{{ fmt(dashStats.premios) }}</strong></td>
+                    <td style="text-align:right" :class="dashStats.resultado>=0?'num-pos':'num-neg'"><strong>{{ fmt(dashStats.resultado) }}</strong></td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title">Distribución del Período</div></div>
+            <div class="card-body">
+              <div class="chart-wrap"><canvas id="chartDonut"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 4: Ventas vs Premios bar + Flujo línea ── -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Ventas vs Premios vs Resultado</div></div>
+            <div class="card-body"><div class="chart-wrap"><canvas id="chartBar"></canvas></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Saldo Flujo de Efectivo</div></div>
+            <div class="card-body"><div class="chart-wrap"><canvas id="chartFlujoLine"></canvas></div></div>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 5: Últimos movimientos banco ── -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Últimos Movimientos Bancarios</div>
+            <button class="btn btn-ghost btn-sm" @click="view='banco'">Ver todos →</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="empty" v-if="!bancoMovs.length">
+              <div class="empty-icon">🏦</div><p>Sin movimientos registrados</p>
+            </div>
+            <table v-else>
+              <thead><tr><th>Fecha</th><th>Concepto</th><th>Grupo</th><th>Tipo</th><th>Monto</th><th>Saldo</th></tr></thead>
+              <tbody>
+                <tr v-for="m in bancoMovs.slice(0,6)" :key="m.id">
+                  <td>{{ m.fecha }}</td>
+                  <td>{{ m.concepto }}</td>
+                  <td>{{ m.grupos?.nombre || '—' }}</td>
+                  <td><span :class="m.tipo==='ingreso' ? 'tag tag-green' : 'tag tag-red'">{{ m.tipo }}</span></td>
+                  <td :class="m.tipo==='ingreso' ? 'num-pos' : 'num-neg'">{{ m.tipo==='ingreso'?'+':'-' }}{{ fmt(m.monto) }}</td>
+                  <td :class="m.saldo_acumulado>=0?'num-pos':'num-neg'">{{ fmt(m.saldo_acumulado) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 6: Análisis de Gastos ── -->
+        <div class="card" style="margin-bottom:0">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📋 Análisis de Gastos — Período</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">Desglose por categoría registrada</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <div v-if="!dashGastosCat.length" style="text-align:center;color:var(--muted);padding:24px 0;font-size:12px">
+              Sin gastos registrados para este período
+            </div>
+            <div v-else>
+              <!-- KPIs rápidos de gastos -->
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                  <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">TOTAL GASTOS</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--red)">{{ fmt(dashKpis.gastos) }}</div>
+                </div>
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                  <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">CATEGORÍAS</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--blue)">{{ dashGastosCat.length }}</div>
+                </div>
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+                  <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">% DEL RESULTADO</div>
+                  <div style="font-size:18px;font-weight:700;color:var(--yellow)">
+                    {{ dashStats.ventas > 0 ? (dashKpis.gastos/dashStats.ventas*100).toFixed(1)+'%' : '—' }}
+                  </div>
+                  <div style="font-size:9px;color:var(--muted)">sobre ventas</div>
+                </div>
+              </div>
+
+              <!-- Top categorías tabla -->
+              <div style="margin-bottom:18px">
+                <div style="font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:8px;text-transform:uppercase">Top Categorías</div>
+                <div v-for="c in dashGastosCat.slice(0,6)" :key="c.nombre"
+                     style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                  <div style="width:10px;height:10px;border-radius:50%;flex-shrink:0"
+                       :style="'background:' + (c.color||'#5a6a80')"></div>
+                  <div style="flex:1;font-size:11px">{{ c.nombre }}</div>
+                  <div style="width:120px;background:var(--border);border-radius:3px;height:6px;overflow:hidden">
+                    <div style="height:100%;border-radius:3px;transition:width 0.4s"
+                         :style="'width:'+c.pct+'%;background:'+(c.color||'#5a6a80')"></div>
+                  </div>
+                  <div style="width:52px;text-align:right;font-size:11px;color:var(--red)">{{ fmt(c.total) }}</div>
+                  <div style="width:34px;text-align:right;font-size:10px;color:var(--muted)">{{ c.pct }}%</div>
+                </div>
+              </div>
+
+              <!-- 3 gráficos -->
+              <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:14px">
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:8px;text-align:center">DISTRIBUCIÓN</div>
+                  <div style="height:200px"><canvas id="chartGastoCat"></canvas></div>
+                </div>
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:8px;text-align:center">BARRAS POR CATEGORÍA</div>
+                  <div style="height:200px"><canvas id="chartGastoBars"></canvas></div>
+                </div>
+                <div>
+                  <div style="font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:8px;text-align:center">OPERATIVO vs PARTICIPACIÓN</div>
+                  <div style="height:200px"><canvas id="chartGastoTipo"></canvas></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-gap" style="height:16px"></div>
+
+        <!-- ── ROW 7: Flujo de Efectivo — Análisis Gerencial ── -->
+        <div class="card" style="margin-bottom:0">
+          <div class="card-header">
+            <div>
+              <div class="card-title">💵 Flujo de Efectivo — Análisis del Período</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">Movimientos registrados en el período seleccionado</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" @click="view='flujo'">Ver detalle →</button>
+          </div>
+          <div class="card-body">
+
+            <!-- KPIs rápidos flujo -->
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px">
+              <div style="background:rgba(0,229,160,0.07);border:1px solid rgba(0,229,160,0.2);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">INGRESOS</div>
+                <div style="font-size:17px;font-weight:700;color:var(--accent)">{{ fmt(dashKpis.flujoIngresos||0) }}</div>
+              </div>
+              <div style="background:rgba(255,77,109,0.07);border:1px solid rgba(255,77,109,0.2);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">EGRESOS</div>
+                <div style="font-size:17px;font-weight:700;color:var(--red)">{{ fmt(dashKpis.flujoEgresos||0) }}</div>
+              </div>
+              <div :style="'background:rgba('+(dashKpis.flujoNeto>=0?'0,229,160':'255,77,109')+',0.07);border:1px solid rgba('+(dashKpis.flujoNeto>=0?'0,229,160':'255,77,109')+',0.2);border-radius:8px;padding:12px;text-align:center'">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">NETO PERÍODO</div>
+                <div :class="'font-size:17px;font-weight:700'" :style="'font-size:17px;font-weight:700;color:'+(dashKpis.flujoNeto>=0?'var(--accent)':'var(--red)')">{{ fmt(dashKpis.flujoNeto||0) }}</div>
+              </div>
+              <div style="background:rgba(76,201,240,0.07);border:1px solid rgba(76,201,240,0.2);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">DE CUADRES</div>
+                <div :style="'font-size:17px;font-weight:700;color:var(--blue)'">{{ fmt(dashKpis.flujoCuadre||0) }}</div>
+              </div>
+              <div style="background:rgba(255,209,102,0.07);border:1px solid rgba(255,209,102,0.2);border-radius:8px;padding:12px;text-align:center">
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:4px">PRÉSTAMOS</div>
+                <div style="font-size:17px;font-weight:700;color:var(--yellow)">{{ fmt(dashKpis.flujoPrestamo||0) }}</div>
+              </div>
+            </div>
+
+            <!-- Fila de indicadores secundarios -->
+            <div style="display:flex;gap:16px;margin-bottom:18px;font-size:11px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>
+                <span style="color:var(--muted)">Cobertura gastos:</span>
+                <strong :style="'color:'+(dashKpis.flujoIngresos>dashKpis.gastos?'var(--accent)':'var(--red)')">
+                  {{ dashKpis.gastos>0 ? (dashKpis.flujoIngresos/dashKpis.gastos*100).toFixed(0)+'%' : '—' }}
+                </strong>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--blue)"></div>
+                <span style="color:var(--muted)">Eficiencia flujo:</span>
+                <strong :style="'color:'+(dashKpis.flujoNeto>=0?'var(--accent)':'var(--red)')">
+                  {{ dashKpis.flujoIngresos>0 ? (dashKpis.flujoNeto/dashKpis.flujoIngresos*100).toFixed(1)+'%' : '—' }}
+                </strong>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--yellow)"></div>
+                <span style="color:var(--muted)">Días con movimiento:</span>
+                <strong style="color:var(--text)">{{ (dashKpis.flujoDias||[]).length }}</strong>
+              </div>
+            </div>
+
+            <!-- 4 gráficos flujo -->
+            <div style="display:grid;grid-template-columns:1.6fr 1.6fr 1fr 1fr;gap:14px">
+              <div>
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Ingresos vs Egresos por Día</div>
+                <div style="height:190px"><canvas id="chartFlujoIngEgr"></canvas></div>
+              </div>
+              <div>
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Saldo Acumulado</div>
+                <div style="height:190px"><canvas id="chartFlujoAcum"></canvas></div>
+              </div>
+              <div>
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;text-align:center">Por Origen</div>
+                <div style="height:190px"><canvas id="chartFlujoOrigen"></canvas></div>
+              </div>
+              <div>
+                <div style="font-size:9px;letter-spacing:1px;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Egresos / Categoría</div>
+                <div style="height:190px"><canvas id="chartFlujoCatEgr"></canvas></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>

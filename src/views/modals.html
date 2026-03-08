@@ -1,0 +1,2299 @@
+<!-- ══ MODALS ══ -->
+
+  <!-- GASTO MODAL -->
+  <div class="overlay" v-if="showGastoModal" @click.self="showGastoModal=false">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">{{ gastoEditId ? "✏️ Editar Gasto" : "💸 Registrar Gasto" }}</div>
+        <button class="close-btn" @click="showGastoModal=false">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Período</label>
+              <select class="form-control" v-model="gastoFrm.periodo_id">
+                <option value="">— Período —</option>
+                <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha</label>
+              <input type="date" class="form-control" v-model="gastoFrm.fecha">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Grupo</label>
+              <select class="form-control" v-model="gastoFrm.grupo_id" @change="gastoFrm.banca_id=''">
+                <option value="">— Grupo (opcional) —</option>
+                <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">
+                Banca
+                <span v-if="gastoFrm.tipo==='operativo'" style="color:var(--blue);font-size:9px;margin-left:4px">
+                  ★ asigna al cuadre
+                </span>
+              </label>
+              <select class="form-control"
+                :style="gastoFrm.tipo==='operativo' && !gastoFrm.banca_id ? 'border-color:rgba(76,201,240,0.6)' : ''"
+                v-model="gastoFrm.banca_id">
+                <option value="">{{ gastoFrm.tipo==='operativo' ? '— Sin banca (va a total del grupo) —' : '— Banca (opcional) —' }}</option>
+                <option v-for="b in (gastoFrm.grupo_id ? bancas.filter(b=>b.grupo_id===gastoFrm.grupo_id) : bancas)"
+                        :key="b.id" :value="b.id">{{ b.codigo }} — {{ b.nombre }}</option>
+              </select>
+            </div>
+          </div>
+          <!-- Tip contextual según tipo -->
+          <div v-if="gastoFrm.tipo==='operativo'" class="alert alert-info" style="font-size:11px;padding:8px 12px">
+            💡 <strong>Operativo</strong> — Este gasto <strong>aparecerá en el cuadre</strong> del supervisor y se descontará del resultado.
+            <span v-if="!gastoFrm.banca_id"> Sin banca: se descuenta del total del grupo.</span>
+            <span v-else> Se asignará a la banca seleccionada.</span>
+          </div>
+          <div v-else-if="gastoFrm.tipo==='central'" class="alert" style="font-size:11px;padding:8px 12px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);color:var(--yellow)">
+            🏢 <strong>Central</strong> — Gasto de administración central. <strong>No aparece en cuadres de supervisores.</strong>
+          </div>
+          <div class="form-row">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Categoría de Gasto</label>
+              <select class="form-control" v-model="gastoFrm.categoria_id">
+                <option value="">— Seleccionar categoría —</option>
+                <option v-for="c in categorias.filter(c=>c.tipo==='egreso'&&c.activo)" :key="c.id" :value="c.id">
+                  {{ c.nombre }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tipo de Gasto</label>
+              <select class="form-control" v-model="gastoFrm.tipo">
+                <option value="operativo">Operativo</option>
+                <option value="central">Central</option>
+                <option value="sistema">Sistema</option>
+                <option value="equipo">Equipo</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Monto</label>
+              <input type="number" class="form-control" v-model.number="gastoFrm.monto" placeholder="0">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Concepto / Descripción</label>
+            <input type="text" class="form-control" v-model="gastoFrm.concepto" placeholder="Ej: Pago internet banca 3005">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" @click="showGastoModal=false">Cancelar</button>
+        <button class="btn btn-primary" @click="saveGasto" :disabled="!gastoFrm.concepto||!gastoFrm.monto">
+          💾 Guardar Gasto
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- GRUPO MODAL -->
+
+  <!-- BANCA MODAL -->
+
+  <!-- PERÍODO MODAL -->
+
+  <!-- REPORTE IMPRIMIBLE -->
+
+  <div class="toast-container">
+    <div v-for="t in toasts" :key="t.id" :class="['toast', 'toast-' + t.type]">
+      {{ t.msg }}
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<script>
+const { createApp, ref, computed, onMounted, watch, nextTick } = Vue;
+
+createApp({
+  setup() {
+    // ── SUPABASE ──
+    let sb = null;
+    const config = ref({ supabaseUrl: '', supabaseKey: '' });
+    const supabaseConfigured = ref(false);
+
+    function initSupabase() {
+      const url = config.value.supabaseUrl;
+      const key = config.value.supabaseKey;
+      if (!url || !key) return false;
+      try {
+        sb = supabase.createClient(url, key);
+        supabaseConfigured.value = true;
+        return true;
+      } catch(e) { return false; }
+    }
+
+    function saveConfig() {
+      localStorage.setItem('lotto_config', JSON.stringify(config.value));
+      if (initSupabase()) {
+        toast('✅ Conectado a Supabase', 'success');
+        refreshAll();
+      } else {
+        toast('❌ Error de conexión — verifica los datos', 'error');
+      }
+    }
+
+    function loadConfig() {
+      const c = localStorage.getItem('lotto_config');
+      if (c) {
+        config.value = JSON.parse(c);
+        initSupabase();
+      }
+    }
+
+    // ── CATEGORÍAS ──
+    const categorias = ref([]);
+    const showCategoriaModal = ref(false);
+    const editCategoria = ref({});
+
+    async function loadCategorias() {
+      if (!sb) return;
+      const { data } = await sb.from('categorias').select('*').order('tipo').order('orden');
+      categorias.value = data || [];
+    }
+    function editarCategoria(c) { editCategoria.value = {...c}; showCategoriaModal.value = true; }
+    async function saveCategoria() {
+      if (!sb) return;
+      const c = {...editCategoria.value};
+      if (c.activo === undefined) c.activo = true;
+      const { error } = c.id
+        ? await sb.from('categorias').update(c).eq('id', c.id)
+        : await sb.from('categorias').insert(c);
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+      toast('Categoría guardada', 'success');
+      showCategoriaModal.value = false;
+      loadCategorias();
+    }
+    async function deleteCategoria(id) {
+      if (!await confirmDialog('¿Eliminar categoría?', 'Esta acción no se puede deshacer.')) return;
+      await sb.from('categorias').delete().eq('id', id);
+      loadCategorias();
+    }
+    function categoriaTipo(id) {
+      // Esta función ya no modifica gastoFrm.tipo — el tipo del gasto
+      // es independiente del tipo de la categoría ('egreso'/'ingreso')
+      const c = categorias.value.find(c=>c.id===id);
+      return c?.tipo || 'egreso'; // solo para uso interno de categorias, no para gastos.tipo
+    }
+
+    // ── TOAST ──
+    const toasts = ref([]);
+    function toast(msg, type='success') {
+      const icons = { success:'success', error:'error', warning:'warning', info:'info' };
+      // Detectar si es un mensaje de guardado/edición para fuente más pequeña
+      const isSaveMsg = /guard|edit|actualiz|registr|guarda|eliminad|borrad/i.test(msg);
+      Swal.fire({
+        toast: true, position: 'bottom-end',
+        icon: icons[type] || 'info', title: msg,
+        showConfirmButton: false,
+        timer: isSaveMsg ? 1600 : 2200,
+        timerProgressBar: true,
+        customClass: isSaveMsg ? { title: 'swal-title-sm' } : {},
+        didOpen: (t) => { t.addEventListener('mouseenter', Swal.stopTimer); t.addEventListener('mouseleave', Swal.resumeTimer); }
+      });
+    }
+    async function confirmDialog(title, text='Esta acción no se puede deshacer.', confirmText='Sí, eliminar', icon='warning') {
+      const result = await Swal.fire({
+        title, text, icon,
+        showCancelButton: true,
+        confirmButtonColor: '#e74c3c', cancelButtonColor: '#555',
+        confirmButtonText: confirmText, cancelButtonText: 'Cancelar'
+      });
+      return result.isConfirmed;
+    }
+
+    // ── VIEW ──
+    const view = ref('dashboard');
+    const viewTitles = {
+      dashboard: '📊 Dashboard', resumen: '📋 Resumen Semanal',
+      cuadre: '⚖️ Cuadre Semanal', importar: '📥 Importar Ventas',
+      gastos: '💸 Gastos', prestamos: '💰 Préstamos',
+      participacion: '📈 Participación', banco: '🏦 Cuenta Bancaria',
+      grupos: '👥 Grupos', bancas: '🏪 Bancas',
+      periodos: '📅 Períodos', config: '⚙️ Configuración',
+      categorias: '🏷️ Categorías', flujo: '💵 Flujo de Efectivo', estado_resultados: '📑 Estado de Resultados',
+      docs: '📚 Guía de Uso'
+    };
+
+    // ── FORMAT ──
+    function fmt(n) {
+      if (n === null || n === undefined) return '$0';
+      const v = Number(n) || 0;
+      return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+    function pct(a, b) { return b ? ((a/b)*100).toFixed(1) + '%' : '0%'; }
+
+    // ══════════════════════════════════════════
+    // PERIODOS
+    // ══════════════════════════════════════════
+    const periodos = ref([]);
+    const loadingPeriodos = ref(false);
+    const selectedPeriodoId = ref('');
+    const activePeriodo = computed(() => periodos.value.find(p=>p.id===selectedPeriodoId.value));
+    const showPeriodoModal = ref(false);
+    const editPeriodo = ref({});
+
+    async function loadPeriodos() {
+      if (!sb) return;
+      loadingPeriodos.value = true;
+      const { data } = await sb.from('periodos').select('*').order('fecha_inicio', { ascending: false });
+      periodos.value = data || [];
+      if (!selectedPeriodoId.value && periodos.value.length) selectedPeriodoId.value = periodos.value[0].id;
+      loadingPeriodos.value = false;
+    }
+    function editarPeriodo(p) { editPeriodo.value = {...p}; showPeriodoModal.value = true; }
+    async function savePeriodo() {
+      if (!sb) { toast('Configura Supabase primero','error'); return; }
+      const p = editPeriodo.value;
+      if (!p.descripcion) p.descripcion = `Semana ${p.fecha_inicio} al ${p.fecha_fin}`;
+      const { error } = p.id
+        ? await sb.from('periodos').update(p).eq('id', p.id)
+        : await sb.from('periodos').insert(p);
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+      toast('Período guardado', 'success');
+      showPeriodoModal.value = false;
+      loadPeriodos();
+    }
+    async function deletePeriodo(id) {
+      if (!await confirmDialog('¿Eliminar período?', 'Se eliminarán todos los cuadres y ventas del período.')) return;
+      await sb.from('periodos').delete().eq('id', id);
+      loadPeriodos();
+    }
+
+    // ══════════════════════════════════════════
+    // GRUPOS
+    // ══════════════════════════════════════════
+    const grupos = ref([]);
+    const loadingGrupos = ref(false);
+    const showGrupoModal = ref(false);
+    const editGrupo = ref({});
+
+    async function loadGrupos() {
+      if (!sb) return;
+      loadingGrupos.value = true;
+      const { data } = await sb.from('grupos').select('*').order('nombre');
+      grupos.value = data || [];
+      loadingGrupos.value = false;
+    }
+    function editarGrupo(g) { editGrupo.value = {...g}; showGrupoModal.value = true; }
+    async function saveGrupo() {
+      if (!sb) { toast('Configura Supabase primero','error'); return; }
+      const g = {...editGrupo.value};
+      if (!g.balance_inicial) g.balance_inicial = 0;
+      if (!g.arrastre_part_inicial) g.arrastre_part_inicial = 0;
+      if (g.activo === undefined) g.activo = true;
+      if (!g.modo) g.modo = 'estandar';
+      const { error } = g.id
+        ? await sb.from('grupos').update(g).eq('id', g.id)
+        : await sb.from('grupos').insert(g);
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+      toast('Grupo guardado', 'success');
+      showGrupoModal.value = false;
+      loadGrupos();
+    }
+    async function deleteGrupo(id) {
+      if (!await confirmDialog('¿Eliminar grupo?', 'Se perderán todas las bancas asociadas.')) return;
+      await sb.from('grupos').delete().eq('id', id);
+      loadGrupos();
+    }
+
+    // ══════════════════════════════════════════
+    // BANCAS
+    // ══════════════════════════════════════════
+    const bancas = ref([]);
+    const loadingBancas = ref(false);
+    const showBancaModal = ref(false);
+    const editBanca = ref({});
+    const bancaFiltroGrupo = ref('');
+    const bancasFiltradas = computed(() =>
+      bancaFiltroGrupo.value ? bancas.value.filter(b=>b.grupo_id===bancaFiltroGrupo.value) : bancas.value
+    );
+
+    async function loadBancas() {
+      if (!sb) return;
+      loadingBancas.value = true;
+      const { data } = await sb.from('bancas').select('*').order('codigo');
+      bancas.value = data || [];
+      loadingBancas.value = false;
+    }
+    function editarBanca(b) { editBanca.value = {...b}; showBancaModal.value = true; }
+    async function saveBanca() {
+      if (!sb) { toast('Configura Supabase primero','error'); return; }
+      const b = {...editBanca.value};
+      if (b.activo === undefined) b.activo = true;
+      const { error } = b.id
+        ? await sb.from('bancas').update(b).eq('id', b.id)
+        : await sb.from('bancas').insert(b);
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+      toast('Banca guardada', 'success');
+      showBancaModal.value = false;
+      loadBancas();
+    }
+    async function deleteBanca(id) {
+      if (!await confirmDialog('¿Eliminar banca?', 'Se perderán todos los datos de esta banca.')) return;
+      await sb.from('bancas').delete().eq('id', id);
+      loadBancas();
+    }
+
+    // ══════════════════════════════════════════
+    // DASHBOARD
+    // ══════════════════════════════════════════
+    const loadingDash = ref(false);
+    const grupoCuadres = ref([]);
+    const dashStats = ref({ ventas: 0, premios: 0, comisiones: 0, resultado: 0, bancas_activas: 0 });
+    const dashKpis = ref({ gastos: 0, flujoIngresos: 0, flujoEgresos: 0, flujoNeto: 0, saldoBanco: 0, participacionTotal: 0, participacionPagada: 0 });
+    const dashGastosCat = ref([]);  // [{ nombre, color, total, pct }] agrupado por categoría
+    const dashGruposBancas = ref({});   // { grupo_id: [banca rows] } for drilldown
+    const dashExpandido = Vue.reactive({});
+    let barChart = null; let donutChart = null; let flujoLineChart = null;
+
+    // ── THEME MODE ──
+    const themeMode = ref(localStorage.getItem('themeMode') || 'auto');
+    const isDark = computed(() => {
+      if (themeMode.value === 'dark') return true;
+      if (themeMode.value === 'light') return false;
+      return new Date().getHours() >= 19 || new Date().getHours() < 7;
+    });
+    function toggleTheme() {
+      const modes = ['auto','dark','light'];
+      themeMode.value = modes[(modes.indexOf(themeMode.value)+1) % 3];
+      localStorage.setItem('themeMode', themeMode.value);
+      applyTheme();
+    }
+    function applyTheme() {
+      const dark = isDark.value;
+      const d = document.documentElement;
+      const s = (k,v) => d.style.setProperty(k, v);
+
+      // ── Fondos y superficies ──
+      s('--bg',        dark ? '#0a0d12'  : '#eef2f8');
+      s('--surface',   dark ? '#111620'  : '#ffffff');
+      s('--surface2',  dark ? '#161d2b'  : '#f4f7fb');
+      s('--border',    dark ? '#1e2a3a'  : '#c5d1e8');
+      s('--border2',   dark ? '#253347'  : '#a8b9d0');
+
+      // ── Texto ──
+      s('--text',      dark ? '#e8edf5'  : '#0f1f3d');
+      s('--muted',     dark ? '#5a6a80'  : '#4a5e7a');
+
+      // ── Colores funcionales — Royal Blue en claro ──
+      s('--accent',    dark ? '#00e5a0'  : '#3b7dd8');   // verde neón / Azul medio suave
+      s('--accent2',   dark ? '#00b87a'  : '#2563c0');   // verde2  / azul profundo
+      s('--red',       dark ? '#ff4d6d'  : '#c0152d');   // rojo neón / rojo sólido
+      s('--yellow',    dark ? '#ffd166'  : '#b45309');   // amarillo / ámbar oscuro
+      s('--blue',      dark ? '#4cc9f0'  : '#1e7bb8');   // celeste neón / azul cielo
+
+      // ── Glow y sombras ──
+      s('--card-glow', dark
+        ? '0 0 30px rgba(0,229,160,0.04)'
+        : '0 2px 12px rgba(26,86,219,0.07)');
+
+      // ── Input (siempre amarillo identificador) ──
+      s('--input-bg',     '#FDFFEF');
+      s('--input-text',   '#0f1f3d');
+      s('--input-border', dark ? '#2a3f55' : '#c8d2a0');
+
+      // ── Tags y badges con accent actual ──
+      d.setAttribute('data-theme', dark ? 'dark' : 'light');
+    }
+    // Apply on mount + auto-check every minute
+    applyTheme();
+    setInterval(() => { if (themeMode.value === 'auto') applyTheme(); }, 60000);
+    watch(isDark, applyTheme);
+
+    async function loadDashboard() {
+      if (!sb || !selectedPeriodoId.value) return;
+      loadingDash.value = true;
+
+      // ── Ventas_semana agrupadas por grupo ──
+      const { data: ventasData } = await sb.from('ventas_semana')
+        .select('*, bancas(id, codigo, nombre, porcentaje_comision, grupo_id)')
+        .eq('periodo_id', selectedPeriodoId.value);
+
+      const groupMap = {};
+      const bancasDetalle = {}; // grupo_id → array of banca rows
+      for (const v of (ventasData || [])) {
+        const gid = v.bancas?.grupo_id || 'sin_grupo';
+        const g = grupos.value.find(g => g.id === gid);
+        const modo = g?.modo || 'estandar';
+        if (!groupMap[gid]) groupMap[gid] = {
+          id: gid, grupos: { nombre: g?.nombre || 'Sin Grupo' },
+          modo, total_ventas: 0, total_premios: 0, total_comisiones: 0, resultado_loteria: 0
+        };
+        const vtas = v.ventas || 0;
+        const prem = v.premios || 0;
+        const com  = vtas * (v.bancas?.porcentaje_comision || 0) / 100;
+        groupMap[gid].total_ventas     += vtas;
+        groupMap[gid].total_premios    += prem;
+        groupMap[gid].total_comisiones += com;
+        groupMap[gid].resultado_loteria+= (vtas - prem) - com;
+        // Guardar detalle de banca para drilldown de grupos Capital
+        if (modo === 'individual_bancas') {
+          if (!bancasDetalle[gid]) bancasDetalle[gid] = [];
+          const existing = bancasDetalle[gid].find(b => b.banca_id === v.banca_id);
+          if (!existing) bancasDetalle[gid].push({
+            banca_id: v.banca_id, codigo: v.bancas?.codigo, nombre: v.bancas?.nombre,
+            ventas: vtas, premios: prem, comision: com, resultado: (vtas - prem) - com
+          });
+          else {
+            existing.ventas += vtas; existing.premios += prem;
+            existing.comision += com; existing.resultado += (vtas - prem) - com;
+          }
+        }
+      }
+
+      // Cuadres guardados (grupos estándar) — no aplica a Capital que usa cuadres_banca
+      const { data: cuadres } = await sb.from('cuadres_grupo')
+        .select('*, grupos(nombre)').eq('periodo_id', selectedPeriodoId.value);
+      for (const c of (cuadres || [])) {
+        // Solo reemplazar si NO es individual_bancas (esos se calculan desde ventas)
+        const modo = grupos.value.find(g=>g.id===c.grupo_id)?.modo || 'estandar';
+        if (modo !== 'individual_bancas') groupMap[c.grupo_id] = { ...c, modo };
+      }
+
+      // Para Capital: complementar detalle desde cuadres_banca si existen
+      for (const gid of Object.keys(bancasDetalle)) {
+        const { data: cb } = await sb.from('cuadres_banca')
+          .select('*, bancas(codigo, nombre)')
+          .eq('grupo_id', gid).eq('periodo_id', selectedPeriodoId.value);
+        if (cb && cb.length) {
+          bancasDetalle[gid] = cb.map(c => ({
+            banca_id: c.banca_id, codigo: c.bancas?.codigo, nombre: c.bancas?.nombre,
+            ventas: c.ventas, premios: c.premios, comision: c.comision, resultado: c.resultado_periodo
+          }));
+        }
+      }
+      dashGruposBancas.value = bancasDetalle;
+
+      grupoCuadres.value = Object.values(groupMap)
+        .filter(g => g.total_ventas > 0 || g.resultado_loteria !== 0)
+        .sort((a,b) => (a.grupos?.nombre||'').localeCompare(b.grupos?.nombre||''));
+
+      dashStats.value = {
+        ventas:        grupoCuadres.value.reduce((s,g)=>s+(g.total_ventas||0), 0),
+        premios:       grupoCuadres.value.reduce((s,g)=>s+(g.total_premios||0), 0),
+        comisiones:    grupoCuadres.value.reduce((s,g)=>s+(g.total_comisiones||0), 0),
+        resultado:     grupoCuadres.value.reduce((s,g)=>s+(g.resultado_loteria||0), 0),
+        bancas_activas: bancas.value.filter(b=>b.activo).length
+      };
+
+      // ── KPIs adicionales: gastos, flujo, participación ──
+      const [gastosRes, flujoRes, partRes, bancoRes] = await Promise.all([
+        sb.from('gastos').select('monto,tipo,categoria_id,categorias(nombre,color)').eq('periodo_id', selectedPeriodoId.value),
+        sb.from('flujo_efectivo').select('tipo,monto,fecha,origen,categoria_id,categorias(nombre,color)').eq('periodo_id', selectedPeriodoId.value),
+        sb.from('participacion_acumulada').select('monto_a_pagar,pagado').eq('periodo_id', selectedPeriodoId.value),
+        sb.from('cuenta_banco').select('tipo,monto').order('fecha').order('created_at')
+      ]);
+      const gastos = (gastosRes.data||[]);
+      const flujo  = (flujoRes.data||[]);
+      const part   = (partRes.data||[]);
+      const banco  = (bancoRes.data||[]);
+      let saldoB = 0; banco.forEach(m => saldoB += m.tipo==='ingreso' ? m.monto : -m.monto);
+      const totalGastos = gastos.reduce((s,g)=>s+(g.monto||0), 0);
+      const flujoIng   = flujo.filter(m=>m.tipo==='ingreso');
+      const flujoEgr   = flujo.filter(m=>m.tipo==='egreso');
+      const flujoIngTotal = flujoIng.reduce((s,m)=>s+m.monto,0);
+      const flujoEgrTotal = flujoEgr.reduce((s,m)=>s+m.monto,0);
+      const flujoNeto  = flujoIngTotal - flujoEgrTotal;
+      // Flujo por origen
+      const flujoCuadre  = flujo.filter(m=>m.origen==='cuadre').reduce((s,m)=>s+(m.tipo==='ingreso'?m.monto:-m.monto),0);
+      const flujoPrestamo= flujo.filter(m=>m.origen==='prestamo').reduce((s,m)=>s+(m.tipo==='ingreso'?m.monto:-m.monto),0);
+      const flujoManual  = flujo.filter(m=>!m.origen||m.origen==='manual').reduce((s,m)=>s+(m.tipo==='ingreso'?m.monto:-m.monto),0);
+      // Flujo por categoría (top 5 egresos)
+      const flujoCatMap  = {};
+      for (const m of flujoEgr) {
+        const k = m.categoria_id || '__sin__';
+        const n = m.categorias?.nombre || 'Sin Categoría';
+        const c = m.categorias?.color || '#5a6a80';
+        if (!flujoCatMap[k]) flujoCatMap[k] = { nombre: n, color: c, total: 0 };
+        flujoCatMap[k].total += m.monto;
+      }
+      // Flujo por día (para línea)
+      const flujoDiaMap = {};
+      for (const m of flujo) {
+        const d = m.fecha || '?';
+        if (!flujoDiaMap[d]) flujoDiaMap[d] = { ing: 0, egr: 0 };
+        m.tipo==='ingreso' ? (flujoDiaMap[d].ing += m.monto) : (flujoDiaMap[d].egr += m.monto);
+      }
+      const flujoDias  = Object.keys(flujoDiaMap).sort();
+      let acum = 0;
+      const flujoAcumLine = flujoDias.map(d => { acum += flujoDiaMap[d].ing - flujoDiaMap[d].egr; return acum; });
+      dashKpis.value = {
+        gastos:              totalGastos,
+        flujoIngresos:       flujoIngTotal,
+        flujoEgresos:        flujoEgrTotal,
+        flujoNeto,
+        flujoCuadre, flujoPrestamo, flujoManual,
+        flujoCatEgr:         Object.values(flujoCatMap).sort((a,b)=>b.total-a.total).slice(0,6),
+        flujoDias, flujoIngDia: flujoDias.map(d=>flujoDiaMap[d].ing),
+        flujoEgrDia: flujoDias.map(d=>flujoDiaMap[d].egr),
+        flujoAcumLine,
+        saldoBanco:          saldoB,
+        participacionTotal:  part.reduce((s,p)=>s+(p.monto_a_pagar||0),0),
+        participacionPagada: part.reduce((s,p)=>s+(p.pagado||0),0),
+      };
+
+      // ── Backfill DB: asignar categoria_id a gastos viejos sin ella ──
+      const catPartMatch = categorias.value.find(c => c.tipo==='egreso' && c.nombre?.toLowerCase().includes('participac'));
+      const gastosOrfanos = gastos.filter(g => !g.categoria_id && g.tipo==='participacion');
+      if (catPartMatch && gastosOrfanos.length) {
+        // Actualizar en DB todos los gastos participacion sin categoria (fire-and-forget)
+        sb.from('gastos').update({ categoria_id: catPartMatch.id })
+          .eq('tipo', 'participacion').is('categoria_id', null)
+          .then(() => {}); // no bloquear el render
+        // Actualizar en memoria para este render
+        gastosOrfanos.forEach(g => {
+          g.categoria_id = catPartMatch.id;
+          g.categorias = { nombre: catPartMatch.nombre, color: catPartMatch.color };
+        });
+      }
+
+      // ── Gastos por categoría ──
+      // Fallback: si no hay categoria_id, inferir por tipo
+      const catFallback = (g) => {
+        if (g.tipo === 'participacion') {
+          const c = catPartMatch || categorias.value.find(c=>c.nombre?.toLowerCase().includes('participac'));
+          return c ? { id: c.id, nombre: c.nombre, color: c.color } : { nombre: 'Participación', color: '#ffd166' };
+        }
+        return { nombre: 'Sin Categoría', color: '#5a6a80' };
+      };
+      const catMap = {};
+      for (const g of gastos) {
+        const cat   = g.categorias || catFallback(g);
+        const key   = g.categoria_id || ('__tipo_' + g.tipo);
+        const label = cat.nombre;
+        const color = cat.color || '#5a6a80';
+        if (!catMap[key]) catMap[key] = { nombre: label, color, total: 0 };
+        catMap[key].total += g.monto || 0;
+      }
+      // También bucket manual: operativo vs participación
+      const opTotal   = gastos.filter(g=>g.tipo!=='participacion').reduce((s,g)=>s+(g.monto||0),0);
+      const partGasto = gastos.filter(g=>g.tipo==='participacion').reduce((s,g)=>s+(g.monto||0),0);
+      dashGastosCat.value = Object.values(catMap)
+        .sort((a,b) => b.total - a.total)
+        .map(c => ({ ...c, pct: totalGastos > 0 ? Math.round(c.total/totalGastos*100) : 0 }));
+      // Add tipo summary as last two entries (used for stacked chart)
+      dashGastosCat.value._opTotal   = opTotal;
+      dashGastosCat.value._partGasto = partGasto;
+
+      loadingDash.value = false;
+      await nextTick();
+      renderDashCharts();
+      renderGastosCharts();
+      renderFlujoKpiCharts();
+    }
+
+    function renderDashCharts() {
+      const isDarkMode = isDark.value;
+      const gridColor = isDarkMode ? '#1e2a3a' : '#e8ecf2';
+      const tickColor = isDarkMode ? '#5a6a80' : '#7a8a9a';
+      const font = { family: 'DM Mono', size: 11 };
+
+      // Chart 1: Ventas vs Premios por grupo
+      const c1 = document.getElementById('chartBar');
+      if (c1) {
+        if (barChart) barChart.destroy();
+        const labels = grupoCuadres.value.map(g => g.grupos?.nombre || '?');
+        barChart = new Chart(c1, {
+          type: 'bar',
+          data: { labels, datasets: [
+            { label: 'Ventas',   data: grupoCuadres.value.map(g=>g.total_ventas||0),   backgroundColor: 'rgba(76,201,240,0.75)', borderRadius: 5 },
+            { label: 'Premios',  data: grupoCuadres.value.map(g=>g.total_premios||0),  backgroundColor: 'rgba(255,77,109,0.75)', borderRadius: 5 },
+            { label: 'Resultado',data: grupoCuadres.value.map(g=>g.resultado_loteria||0), backgroundColor: grupoCuadres.value.map(g=>g.resultado_loteria>=0?'rgba(0,229,160,0.75)':'rgba(255,77,109,0.5)'), borderRadius: 5 },
+          ]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: tickColor, font } } },
+            scales: {
+              x: { grid: { color: gridColor }, ticks: { color: tickColor, font } },
+              y: { grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v => '$'+(v/1000).toFixed(0)+'K' } }
+            }
+          }
+        });
+      }
+
+      // Chart 2: Donut distribución gastos vs comisiones vs resultado
+      const c2 = document.getElementById('chartDonut');
+      if (c2) {
+        if (donutChart) donutChart.destroy();
+        const ds = dashStats.value;
+        donutChart = new Chart(c2, {
+          type: 'doughnut',
+          data: { labels: ['Premios','Comisiones','Gastos','Resultado'],
+            datasets: [{ data: [ds.premios, ds.comisiones, dashKpis.value.gastos, Math.max(ds.resultado,0)],
+              backgroundColor: ['rgba(255,77,109,0.8)','rgba(255,209,102,0.8)','rgba(76,201,240,0.6)','rgba(0,229,160,0.8)'],
+              borderWidth: 0, hoverOffset: 6 }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, cutout: '68%',
+            plugins: { legend: { position: 'bottom', labels: { color: tickColor, font, padding: 12 } } }
+          }
+        });
+      }
+
+      // Chart 3: Flujo de efectivo acumulado (línea) — un punto por día
+      const c3 = document.getElementById('chartFlujoLine');
+      if (c3 && (dashKpis.value.flujoDias||[]).length) {
+        if (flujoLineChart) flujoLineChart.destroy();
+        const lineLabels = dashKpis.value.flujoDias.map(d => d.substring(5));
+        const lineSaldo  = dashKpis.value.flujoAcumLine || [];
+        const lastSaldo  = lineSaldo.slice(-1)[0] || 0;
+        const lColor  = lastSaldo >= 0 ? 'rgba(0,229,160,0.95)' : 'rgba(255,77,109,0.95)';
+        const bgColor = lastSaldo >= 0 ? 'rgba(0,229,160,0.10)' : 'rgba(255,77,109,0.08)';
+        const ptColor = lineSaldo.map(v => v >= 0 ? 'rgba(0,229,160,1)' : 'rgba(255,77,109,1)');
+        flujoLineChart = new Chart(c3, {
+          type: 'line',
+          data: { labels: lineLabels, datasets: [{
+            label: 'Saldo del Día',
+            data: lineSaldo,
+            borderColor: lColor,
+            backgroundColor: bgColor,
+            pointBackgroundColor: ptColor,
+            pointBorderColor: ptColor,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            borderWidth: 2,
+            fill: true,
+            tension: 0.25
+          }]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { labels: { color: tickColor, font } },
+              tooltip: {
+                callbacks: {
+                  label: ctx => ' Saldo: $' + ctx.parsed.y.toLocaleString('es-DO')
+                }
+              }
+            },
+            scales: {
+              x: { grid: { color: gridColor }, ticks: { color: tickColor, font, maxTicksLimit: 10 } },
+              y: { grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v => '$'+(v/1000).toFixed(0)+'K' },
+                afterDataLimits(scale) { scale.max = scale.max * 1.08; } }
+            }
+          }
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // FLUJO KPI CHARTS
+    let flujoIngEgrChart = null; let flujoAcumChart = null; let flujoOrigenChart = null; let flujoCatEgrChart = null;
+    function renderFlujoKpiCharts() {
+      const k         = dashKpis.value;
+      const isDarkMode= isDark.value;
+      const grid      = isDarkMode ? '#1e2a3a' : '#e8ecf2';
+      const tick      = isDarkMode ? '#5a6a80' : '#7a8a9a';
+      const font      = { family: 'DM Mono', size: 10 };
+      const dias      = k.flujoDias  || [];
+      const labDias   = dias.map(d => d.substring(5)); // MM-DD
+
+      // Chart 1: Barras Ingresos vs Egresos por día
+      const c1 = document.getElementById('chartFlujoIngEgr');
+      if (c1) {
+        if (flujoIngEgrChart) flujoIngEgrChart.destroy();
+        flujoIngEgrChart = new Chart(c1, {
+          type: 'bar',
+          data: { labels: labDias, datasets: [
+            { label: 'Ingresos', data: k.flujoIngDia||[], backgroundColor: 'rgba(0,229,160,0.75)', borderRadius: 3 },
+            { label: 'Egresos',  data: k.flujoEgrDia||[], backgroundColor: 'rgba(255,77,109,0.75)', borderRadius: 3 },
+          ]},
+          options: { responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ labels:{ color:tick, font, padding:10 } } },
+            scales:{
+              x:{ stacked:false, grid:{color:grid}, ticks:{color:tick,font,maxTicksLimit:10} },
+              y:{ grid:{color:grid}, ticks:{color:tick,font,callback:v=>'$'+(v/1000).toFixed(0)+'K'} }
+            }
+          }
+        });
+      }
+
+      // Chart 2: Línea saldo acumulado
+      const c2 = document.getElementById('chartFlujoAcum');
+      if (c2) {
+        if (flujoAcumChart) flujoAcumChart.destroy();
+        const lineColor = (k.flujoAcumLine||[]).slice(-1)[0] >= 0 ? 'rgba(0,229,160,0.9)' : 'rgba(255,77,109,0.9)';
+        const fillColor = (k.flujoAcumLine||[]).slice(-1)[0] >= 0 ? 'rgba(0,229,160,0.07)' : 'rgba(255,77,109,0.07)';
+        flujoAcumChart = new Chart(c2, {
+          type: 'line',
+          data: { labels: labDias, datasets: [{
+            label: 'Saldo Acumulado', data: k.flujoAcumLine||[],
+            borderColor: lineColor, backgroundColor: fillColor,
+            borderWidth: 2, pointRadius: 2, fill: true, tension: 0.3
+          }]},
+          options: { responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ labels:{ color:tick, font } } },
+            scales:{
+              x:{ grid:{color:grid}, ticks:{color:tick,font,maxTicksLimit:10} },
+              y:{ grid:{color:grid}, ticks:{color:tick,font,callback:v=>'$'+(v/1000).toFixed(0)+'K'} }
+            }
+          }
+        });
+      }
+
+      // Chart 3: Donut por origen (cuadre / préstamo / manual)
+      const c3 = document.getElementById('chartFlujoOrigen');
+      if (c3) {
+        if (flujoOrigenChart) flujoOrigenChart.destroy();
+        flujoOrigenChart = new Chart(c3, {
+          type: 'doughnut',
+          data: { labels: ['Cuadres','Préstamos','Manual'],
+            datasets:[{ data:[Math.abs(k.flujoCuadre||0), Math.abs(k.flujoPrestamo||0), Math.abs(k.flujoManual||0)],
+              backgroundColor:['rgba(0,229,160,0.8)','rgba(76,201,240,0.8)','rgba(255,209,102,0.8)'],
+              borderWidth:0, hoverOffset:6
+            }]
+          },
+          options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+            plugins:{ legend:{ position:'bottom', labels:{ color:tick, font, padding:10, boxWidth:10 } } }
+          }
+        });
+      }
+
+      // Chart 4: Barras horizontales egresos por categoría
+      const c4 = document.getElementById('chartFlujoCatEgr');
+      if (c4 && (k.flujoCatEgr||[]).length) {
+        if (flujoCatEgrChart) flujoCatEgrChart.destroy();
+        const cats = k.flujoCatEgr;
+        flujoCatEgrChart = new Chart(c4, {
+          type: 'bar',
+          data: { labels: cats.map(c=>c.nombre), datasets:[{
+            label:'Egresos RD$', data: cats.map(c=>c.total),
+            backgroundColor: cats.map(c=>(c.color||'#5a6a80')+'bb'),
+            borderRadius:4
+          }]},
+          options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y',
+            plugins:{ legend:{ display:false } },
+            scales:{
+              x:{ grid:{color:grid}, ticks:{color:tick,font,callback:v=>'$'+(v/1000).toFixed(0)+'K'} },
+              y:{ grid:{display:false}, ticks:{color:tick,font} }
+            }
+          }
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // GASTOS CHARTS (called from renderDashCharts)
+    let gastoCatChart = null; let gastoBarsChart = null; let gastoTipoChart = null;
+    function renderGastosCharts() {
+      const isDarkMode = isDark.value;
+      const gridColor  = isDarkMode ? '#1e2a3a' : '#e8ecf2';
+      const tickColor  = isDarkMode ? '#5a6a80' : '#7a8a9a';
+      const font       = { family: 'DM Mono', size: 11 };
+      const cats       = dashGastosCat.value;
+      if (!cats || !cats.length) return;
+
+      const labels = cats.map(c => c.nombre);
+      const totals = cats.map(c => c.total);
+      const colors = cats.map(c => c.color || '#5a6a80');
+      const bgColors = colors.map(c => c + 'cc');
+
+      // Chart A: Donut por categoría
+      const cA = document.getElementById('chartGastoCat');
+      if (cA) {
+        if (gastoCatChart) gastoCatChart.destroy();
+        gastoCatChart = new Chart(cA, {
+          type: 'doughnut',
+          data: { labels, datasets: [{ data: totals, backgroundColor: bgColors, borderWidth: 0, hoverOffset: 8 }] },
+          options: { responsive: true, maintainAspectRatio: false, cutout: '60%',
+            plugins: { legend: { position: 'right', labels: { color: tickColor, font, padding: 10, boxWidth: 12,
+              generateLabels: chart => chart.data.labels.map((l,i) => ({
+                text: l + '  $' + (chart.data.datasets[0].data[i]/1000).toFixed(1) + 'K',
+                fillStyle: chart.data.datasets[0].backgroundColor[i],
+                strokeStyle: 'transparent', index: i
+              }))
+            }}}
+          }
+        });
+      }
+
+      // Chart B: Barras horizontales top categorías
+      const cB = document.getElementById('chartGastoBars');
+      if (cB) {
+        if (gastoBarsChart) gastoBarsChart.destroy();
+        const top = cats.slice(0, 8);
+        gastoBarsChart = new Chart(cB, {
+          type: 'bar',
+          data: { labels: top.map(c=>c.nombre), datasets: [{
+            label: 'Gasto RD$',
+            data: top.map(c=>c.total),
+            backgroundColor: top.map(c=>(c.color||'#5a6a80')+'bb'),
+            borderRadius: 4
+          }]},
+          options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v=>'$'+(v/1000).toFixed(0)+'K' } },
+              y: { grid: { display: false }, ticks: { color: tickColor, font } }
+            }
+          }
+        });
+      }
+
+      // Chart C: Barras apiladas Operativo vs Participación vs Resultado
+      const cC = document.getElementById('chartGastoTipo');
+      if (cC) {
+        if (gastoTipoChart) gastoTipoChart.destroy();
+        const opT   = cats._opTotal   || 0;
+        const parT  = cats._partGasto || 0;
+        const resN  = Math.max(dashStats.value.resultado, 0);
+        gastoTipoChart = new Chart(cC, {
+          type: 'bar',
+          data: {
+            labels: ['Período Actual'],
+            datasets: [
+              { label: 'Gastos Operativos', data: [opT],  backgroundColor: 'rgba(76,201,240,0.75)', borderRadius: 4 },
+              { label: 'Participación',      data: [parT], backgroundColor: 'rgba(255,209,102,0.75)', borderRadius: 4 },
+              { label: 'Resultado Neto',     data: [resN], backgroundColor: 'rgba(0,229,160,0.75)',   borderRadius: 4 },
+            ]
+          },
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: tickColor, font, padding: 14 } } },
+            scales: {
+              x: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font } },
+              y: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font, callback: v=>'$'+(v/1000).toFixed(0)+'K' } }
+            }
+          }
+        });
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // RESUMEN SEMANAL
+    // ══════════════════════════════════════════
+    const resumenData = ref([]);
+    const loadingResumen = ref(false);
+    const resumenExpandido = Vue.reactive({});
+    const partExpandido = Vue.reactive({}); // drilldown participacion por grupo // { grupo_id: true/false } — reactive for template tracking
+    function toggleResumenDrilldown(gid) {
+      resumenExpandido[gid] = !resumenExpandido[gid];
+    }
+
+    async function loadResumen() {
+      if (!sb || !selectedPeriodoId.value) return;
+      loadingResumen.value = true;
+
+      // Cargar ventas_semana en tiempo real para todos los grupos
+      const { data: ventasData } = await sb.from('ventas_semana')
+        .select('*, bancas(id, porcentaje_comision, grupo_id, grupos(nombre))')
+        .eq('periodo_id', selectedPeriodoId.value);
+
+      // Cargar cuadres guardados para el período
+      const { data: cuadresData } = await sb.from('cuadres_grupo')
+        .select('*, grupos(nombre), periodos(descripcion, fecha_inicio, fecha_fin)')
+        .eq('periodo_id', selectedPeriodoId.value);
+
+      // Cargar gastos operativos del período por grupo
+      const { data: gastosResumen } = await sb.from('gastos')
+        .select('grupo_id, monto, tipo')
+        .eq('periodo_id', selectedPeriodoId.value);
+      // Suma de gastos operativos y de participación por grupo
+      const gastosPorGrupo = {};
+      const partGastoPorGrupo = {};
+      for (const g of (gastosResumen || [])) {
+        if (g.tipo === 'participacion') {
+          partGastoPorGrupo[g.grupo_id] = (partGastoPorGrupo[g.grupo_id] || 0) + (g.monto || 0);
+        } else if (g.tipo === 'operativo') {
+          gastosPorGrupo[g.grupo_id] = (gastosPorGrupo[g.grupo_id] || 0) + (g.monto || 0);
+        }
+      }
+      // Cargar participación desde participacion_acumulada (dato oficial al guardar cuadre)
+      const { data: partAcumData } = await sb.from('participacion_acumulada')
+        .select('grupo_id, monto_a_pagar')
+        .eq('periodo_id', selectedPeriodoId.value);
+      const partAcumPorGrupo = {};
+      for (const p of (partAcumData || [])) {
+        partAcumPorGrupo[p.grupo_id] = (p.monto_a_pagar || 0);
+      }
+
+      // Construir mapa: primero con datos vivos de ventas
+      const periodoObj = periodos.value.find(p=>p.id===selectedPeriodoId.value);
+      const groupMap = {};
+      for (const v of (ventasData || [])) {
+        const gid = v.bancas?.grupo_id;
+        if (!gid) continue;
+        const g = grupos.value.find(g=>g.id===gid);
+        if (!groupMap[gid]) groupMap[gid] = {
+          id: null, grupo_id: gid,
+          grupos: { nombre: g?.nombre || 'Sin Grupo' },
+          periodos: periodoObj,
+          total_ventas: 0, total_premios: 0, total_comisiones: 0,
+          total_gastos: 0, participacion_op: 0, resultado_loteria: 0,
+          // campos de cuadre (vacíos hasta que se guarde)
+          balance_pendiente_anterior: 0, total_acumulado: 0,
+          entregado_supervisor: 0, entregado_central: 0,
+          total_a_depositar: 0, depositado: 0, balance_final: 0,
+          cuadre_guardado: false
+        };
+        const vtas = v.ventas || 0;
+        const prem = v.premios || 0;
+        const pct = v.bancas?.porcentaje_comision || 0;
+        const com = vtas * pct / 100;
+        const resNeto = (vtas - prem) - com;
+        groupMap[gid].total_ventas += vtas;
+        groupMap[gid].total_premios += prem;
+        groupMap[gid].total_comisiones += com;
+        groupMap[gid].resultado_loteria += resNeto;
+      }
+
+      // Aplicar gastos y participación a todos los grupos
+      for (const gid of Object.keys(groupMap)) {
+        if (!groupMap[gid].cuadre_guardado) {
+          groupMap[gid].total_gastos   = gastosPorGrupo[gid]    || 0;
+        }
+        // Participación: preferir dato oficial de participacion_acumulada, si no usar gasto tipo=participacion
+        groupMap[gid].participacion_op = partAcumPorGrupo[gid] || partGastoPorGrupo[gid] || 0;
+      }
+
+      // Sobreescribir con cuadres guardados donde existan (datos más completos)
+      for (const c of (cuadresData || [])) {
+        const grupoModo = grupos.value.find(g=>g.id===c.grupo_id)?.modo || 'estandar'; // null → estandar
+        if (groupMap[c.grupo_id]) {
+          groupMap[c.grupo_id] = { ...groupMap[c.grupo_id], ...c, cuadre_guardado: true, modo: grupoModo };
+        } else {
+          groupMap[c.grupo_id] = { ...c, cuadre_guardado: true, modo: grupoModo };
+        }
+      }
+      // Asegurar que grupos individual_bancas aparecen aunque no tengan cuadre guardado aún
+      for (const g of grupos.value.filter(g=>(g.modo||'estandar')==='individual_bancas' && g.activo !== false)) {
+        if (!groupMap[g.id]) {
+          groupMap[g.id] = {
+            id: null, grupo_id: g.id,
+            grupos: { nombre: g.nombre },
+            periodos: periodos.value.find(p=>p.id===selectedPeriodoId.value),
+            total_ventas: 0, total_premios: 0, total_comisiones: 0,
+            total_gastos: 0, resultado_loteria: 0,
+            balance_pendiente_anterior: 0, total_acumulado: 0,
+            entregado_supervisor: 0, entregado_central: 0,
+            total_a_depositar: 0, depositado: 0, balance_final: 0,
+            cuadre_guardado: false, modo: 'individual_bancas'
+          };
+        } else {
+          groupMap[g.id].modo = 'individual_bancas';
+        }
+      }
+
+      // Para grupos individual_bancas, añadir detalle de bancas
+      for (const gid of Object.keys(groupMap)) {
+        const grupoObj = grupos.value.find(g=>g.id===gid);
+        if ((grupoObj?.modo || 'estandar') === 'individual_bancas') {
+          groupMap[gid].modo = 'individual_bancas';
+          // Cargar cuadres individuales de bancas para este grupo+período
+          const { data: cuadresBanca } = await sb.from('cuadres_banca')
+            .select('*, bancas(id, codigo, nombre, porcentaje_participacion, porcentaje_comision)')
+            .eq('grupo_id', gid)
+            .eq('periodo_id', selectedPeriodoId.value);
+          groupMap[gid].cuadres_bancas = cuadresBanca || [];
+          // Sumar todos los campos de cuadres_banca para totales del grupo
+          if ((cuadresBanca||[]).length > 0) {
+            groupMap[gid].cuadre_guardado = true;
+            const sum = (field) => (cuadresBanca||[]).reduce((s,c)=>s+(c[field]||0),0);
+            groupMap[gid].resultado_loteria        = sum('resultado_periodo');
+            groupMap[gid].total_ventas             = sum('ventas');
+            groupMap[gid].total_premios            = sum('premios');
+            groupMap[gid].total_comisiones         = sum('comision');
+            groupMap[gid].total_gastos             = sum('total_gastos');
+            groupMap[gid].balance_pendiente_anterior = sum('balance_pendiente_anterior');
+            groupMap[gid].total_acumulado          = sum('total_acumulado');
+            groupMap[gid].entregado_supervisor     = sum('entregado_supervisor');
+            groupMap[gid].entregado_central        = sum('entregado_central');
+            groupMap[gid].total_a_depositar        = sum('total_a_depositar');
+            groupMap[gid].depositado               = sum('depositado');
+            groupMap[gid].balance_final            = sum('balance_final');
+          }
+        }
+      }
+
+      resumenData.value = Object.values(groupMap)
+        .filter(g => g.total_ventas > 0 || g.resultado_loteria !== 0 || g.cuadre_guardado || g.modo === 'individual_bancas')
+        .sort((a,b) => (a.grupos?.nombre||'').localeCompare(b.grupos?.nombre||''));
+      loadingResumen.value = false;
+    }
+
+    function printResumen() { window.print(); }
+
+    // ══════════════════════════════════════════
+    // CUADRE SEMANAL
+    // ══════════════════════════════════════════
+    const cuadreGrupoId = ref('');
+    const cuadrePeriodoId = ref('');
+    const cuadreBancaId = ref('');   // para grupos individual_bancas
+    const cuadreData = ref(null);
+    const savingCuadre = ref(false);
+    const balanceAnteriorManual = ref(false);   // true = sin historial, editable
+    const arrastrePartManual = ref(false);       // true = sin historial, editable
+    const cuadreFrm = ref({
+      balance_anterior: 0, entregado_supervisor: 0, entregado_central: 0,
+      depositado: 0, arrastre_participacion: 0, participacion_pagada: 0, notas: ''
+    });
+
+    // FÓRMULA CORRECTA:
+    // Total Acumulado = balance_anterior + resultado_periodo
+    // + Avances sistema (préstamos entregados mid-week, supervisor debe devolverlos)
+    // + Entregado supervisor manual (otros préstamos)
+    // - Entregado central (pagos ya recibidos de ellos)
+    // = Total a Depositar (lo que debe entregar)
+    // - Gasto Participación (se queda con este monto)
+    // = Monto real que supervisor entrega al cuadre
+    const calcTotalDepositar = computed(() => {
+      if (!cuadreData.value) return 0;
+      const acum = cuadreFrm.value.balance_anterior + cuadreData.value.totals.resultado_periodo;
+      // entregado_supervisor = salidas mid-week (avances dados), entregado_central = entradas mid-week (pagos recibidos)
+      return acum + cuadreFrm.value.entregado_supervisor - cuadreFrm.value.entregado_central;
+    });
+    const calcMontoEntregaSupervisor = computed(() => {
+      if (!cuadreData.value) return 0;
+      return calcTotalDepositar.value - calcParticipacion.value;
+    });
+    const calcBalanceFinal = computed(() => calcMontoEntregaSupervisor.value - cuadreFrm.value.depositado);
+    const calcBaseParticipacion = computed(() => {
+      if (!cuadreData.value) return 0;
+      // Base = Ventas - Premios - Comisión (resultado_loteria) + arrastre
+      // Los gastos operativos NO se descuentan para calcular la participación
+      return cuadreFrm.value.arrastre_participacion + cuadreData.value.totals.resultado_loteria;
+    });
+    const calcParticipacion = computed(() => {
+      if (!cuadreData.value) return 0;
+      const base = calcBaseParticipacion.value;
+      if (base <= 0) return 0;
+      return base * (cuadreData.value.grupo?.porcentaje_participacion || 0) / 100;
+    });
+
+    async function loadCuadre() {
+      if (!sb || !cuadreGrupoId.value || !cuadrePeriodoId.value) return;
+      // Para grupos individual_bancas, redirigir a loadCuadreBanca
+      const grupoActual = grupos.value.find(g=>g.id===cuadreGrupoId.value);
+      const grupoModoActual = grupoActual?.modo || 'estandar';
+      if (grupoModoActual === 'individual_bancas') {
+        if (!cuadreBancaId.value) return;
+        return loadCuadreBanca();
+      }
+      cuadreData.value = null; // reset mientras carga
+
+      const grupo = grupos.value.find(g=>g.id===cuadreGrupoId.value);
+      const periodo = periodos.value.find(p=>p.id===cuadrePeriodoId.value);
+      const bancasGrupo = bancas.value.filter(b=>b.grupo_id===cuadreGrupoId.value && b.activo);
+
+      // Cargar ventas del período
+      const { data: ventas } = await sb.from('ventas_semana')
+        .select('*')
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .in('banca_id', bancasGrupo.map(b=>b.id));
+
+      // Cargar gastos del grupo en este período (con categoría para mostrar en panel)
+      const { data: gastosGrupo } = await sb.from('gastos')
+        .select('*, categorias(nombre,color)')
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .eq('grupo_id', cuadreGrupoId.value);
+
+      // Cargar cuadre existente para este período (modo editar si existe)
+      const { data: cuadreExistente } = await sb.from('cuadres_grupo')
+        .select('*')
+        .eq('grupo_id', cuadreGrupoId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .single();
+
+      // ── AUTO-CARGAR BALANCE ANTERIOR Y ARRASTRE PARTICIPACIÓN ──
+      let balanceAnteriorAuto = 0;
+      let arrastrePartAuto = 0;
+      if (!cuadreExistente) {
+        // Balance de efectivo del último cuadre guardado
+        const { data: ultimoCuadre } = await sb.from('cuadres_grupo')
+          .select('balance_final, periodos(fecha_inicio)')
+          .eq('grupo_id', cuadreGrupoId.value)
+          .neq('periodo_id', cuadrePeriodoId.value)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (ultimoCuadre) {
+          balanceAnteriorAuto = ultimoCuadre.balance_final || 0;
+          balanceAnteriorManual.value = false; // viene del sistema → bloqueado
+        } else {
+          balanceAnteriorAuto = grupo?.balance_inicial || 0;
+          balanceAnteriorManual.value = true;  // sin historial → editable
+        }
+
+        // Arrastre de participación del último período registrado
+        const { data: ultimaPart } = await sb.from('participacion_acumulada')
+          .select('arrastre_siguiente')
+          .eq('grupo_id', cuadreGrupoId.value)
+          .neq('periodo_id', cuadrePeriodoId.value)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (ultimaPart) {
+          arrastrePartAuto = ultimaPart.arrastre_siguiente || 0;
+          arrastrePartManual.value = false; // viene del sistema → bloqueado
+        } else {
+          arrastrePartAuto = grupo?.arrastre_part_inicial || 0;
+          arrastrePartManual.value = true;  // sin historial → editable
+        }
+      }
+
+      // ── MOVIMIENTOS DE SEMANA (prestamos del grupo en este período) ──
+      const { data: movSemana } = await sb.from('prestamos')
+        .select('*')
+        .eq('grupo_id', cuadreGrupoId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .order('fecha').order('created_at');
+
+      const movSalidas  = (movSemana||[]).filter(p=>p.tipo==='salida').reduce((s,p)=>s+p.monto,0);
+      const movEntradas = (movSemana||[]).filter(p=>p.tipo==='entrada').reduce((s,p)=>s+p.monto,0);
+      const movNeto = movSalidas - movEntradas;
+
+      // ── GASTOS OPERATIVOS (solo tipo='operativo' rebaja en cuadre del supervisor) ──
+      const gastosOp    = (gastosGrupo||[]).filter(g => g.tipo==='operativo');
+      // Gastos sin banca asignada → van al total del grupo (no a una banca específica)
+      const gastosGrupoSinBanca = gastosOp.filter(g => !g.banca_id);
+      const totalGastosGrupo    = gastosGrupoSinBanca.reduce((s,g)=>s+g.monto,0);
+
+      // ── CALCULAR POR BANCA ──
+      const bancasCalc = bancasGrupo.map(b => {
+        const v = ventas?.find(v=>v.banca_id===b.id) || {};
+        const vtas = v.ventas || 0;
+        const prem = v.premios || 0;
+        const result = vtas - prem;
+        const com = vtas * (b.porcentaje_comision || 0) / 100;
+        const resNeto = result - com;
+        // Solo gastos operativos de esta banca específica
+        const gastosOpBanca = gastosOp.filter(g=>g.banca_id===b.id).reduce((s,g)=>s+g.monto,0);
+        return {
+          ...b,
+          ventas: vtas, premios: prem,
+          resultado: result, comision: com, resultado_neto: resNeto,
+          gastos_op: gastosOpBanca, total_gastos: gastosOpBanca,
+          resultado_periodo: resNeto - gastosOpBanca
+        };
+      });
+
+      const totals = bancasCalc.reduce((acc, b) => ({
+        ventas: acc.ventas + b.ventas,
+        premios: acc.premios + b.premios,
+        resultado: acc.resultado + b.resultado,
+        comisiones: acc.comisiones + b.comision,
+        resultado_loteria: acc.resultado_loteria + b.resultado_neto,
+        gastos_op: acc.gastos_op + b.gastos_op,
+        total_gastos: acc.total_gastos + b.total_gastos,
+        resultado_periodo: acc.resultado_periodo + b.resultado_periodo,
+      }), { ventas:0, premios:0, resultado:0, comisiones:0, resultado_loteria:0, gastos_op:0, total_gastos:0, resultado_periodo:0 });
+      // Agregar gastos de grupo sin banca al total
+      totals.gastos_op         += totalGastosGrupo;
+      totals.total_gastos      += totalGastosGrupo;
+      totals.resultado_periodo -= totalGastosGrupo;
+
+      const pctPart = grupo?.porcentaje_participacion || 0;
+      totals.gasto_participacion = totals.resultado_periodo > 0 ? Math.round(totals.resultado_periodo * pctPart / 100) : 0;
+      totals.resultado_neto_central = totals.resultado_periodo - totals.gasto_participacion;
+
+      cuadreData.value = {
+        grupo, periodo, bancas: bancasCalc, totals,
+        movimientos: movSemana || [],
+        movSalidas, movEntradas, movNeto,
+        editando: !!cuadreExistente,
+        // Gastos operativos visibles en el cuadre
+        gastosOperativos: gastosOp.map(g=>({
+          ...g,
+          _bancaNombre: bancasGrupo.find(b=>b.id===g.banca_id)?.nombre || null,
+          _bancaCodigo: bancasGrupo.find(b=>b.id===g.banca_id)?.codigo || null
+        }))
+      };
+
+      // ── POBLAR FORMULARIO ──
+      if (cuadreExistente) {
+        // MODO EDITAR: cargar todos los valores guardados — no editable manualmente
+        balanceAnteriorManual.value = false;
+        arrastrePartManual.value = false;
+        cuadreFrm.value = {
+          balance_anterior:      cuadreExistente.balance_pendiente_anterior || 0,
+          entregado_supervisor:  cuadreExistente.entregado_supervisor || movSalidas,
+          entregado_central:     cuadreExistente.entregado_central || movEntradas,
+          depositado:            cuadreExistente.depositado || 0,
+          arrastre_participacion:cuadreExistente.arrastre_participacion || 0,
+          participacion_pagada:  cuadreExistente.participacion_pagada || 0,
+          notas:                 cuadreExistente.notas || ''
+        };
+      } else {
+        // NUEVO CUADRE: balance anterior del último cuadre guardado
+        cuadreFrm.value = {
+          balance_anterior:      balanceAnteriorAuto,
+          entregado_supervisor:  movSalidas,
+          entregado_central:     movEntradas,
+          depositado:            0,
+          arrastre_participacion:arrastrePartAuto,
+          participacion_pagada:  0,
+          notas:                 ''
+        };
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // CUADRE INDIVIDUAL POR BANCA (grupos modo=individual_bancas)
+    // ══════════════════════════════════════════
+    function irACuadreBanca(grupo_id, banca_id) {
+      cuadreGrupoId.value = grupo_id;
+      cuadreBancaId.value = banca_id;
+      view.value = 'cuadre';
+      setTimeout(() => loadCuadre(), 200);
+    }
+
+    async function loadCuadreBanca() {
+      if (!sb || !cuadreGrupoId.value || !cuadrePeriodoId.value || !cuadreBancaId.value) return;
+      cuadreData.value = null;
+
+      const grupo  = grupos.value.find(g=>g.id===cuadreGrupoId.value);
+      const periodo = periodos.value.find(p=>p.id===cuadrePeriodoId.value);
+      const banca  = bancas.value.find(b=>b.id===cuadreBancaId.value);
+
+      // Cargar venta de esta banca en este período (maybeSingle: no falla si no hay fila)
+      const { data: ventaBanca } = await sb.from('ventas_semana')
+        .select('*')
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .maybeSingle();
+
+      // Cuadre guardado de esta banca (maybeSingle: no falla si aún no se guardó)
+      const { data: cuadreExistente } = await sb.from('cuadres_banca')
+        .select('*')
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .maybeSingle();
+
+      // Balance anterior: último cuadre_banca de esta banca
+      let balanceAnteriorAuto = 0;
+      let arrastrePartAuto = 0;
+      if (!cuadreExistente) {
+        const { data: ultimoCuadreBanca } = await sb.from('cuadres_banca')
+          .select('balance_final')
+          .eq('banca_id', cuadreBancaId.value)
+          .neq('periodo_id', cuadrePeriodoId.value)
+          .order('created_at', { ascending: false })
+          .limit(1).maybeSingle();
+        if (ultimoCuadreBanca) {
+          balanceAnteriorAuto = ultimoCuadreBanca.balance_final || 0;
+          balanceAnteriorManual.value = false;
+        } else {
+          balanceAnteriorAuto = banca?.balance_inicial || 0;
+          balanceAnteriorManual.value = true;
+        }
+        // Arrastre participación individual de esta banca
+        const { data: ultimaPart } = await sb.from('participacion_acumulada')
+          .select('arrastre_siguiente')
+          .eq('grupo_id', cuadreGrupoId.value)
+          .eq('banca_id', cuadreBancaId.value)
+          .neq('periodo_id', cuadrePeriodoId.value)
+          .order('created_at', { ascending: false })
+          .limit(1).maybeSingle();
+        if (ultimaPart) {
+          arrastrePartAuto = ultimaPart.arrastre_siguiente || 0;
+          arrastrePartManual.value = false;
+        } else {
+          arrastrePartAuto = 0;
+          arrastrePartManual.value = true;
+        }
+      }
+
+      const vtas  = ventaBanca?.ventas  || 0;
+      const prem  = ventaBanca?.premios || 0;
+      const result = vtas - prem;
+      const pctCom = banca?.porcentaje_comision || 0;
+      const com    = vtas * pctCom / 100;
+      const resNeto = result - com;
+
+      // ── GASTOS OPERATIVOS de esta banca en este período ──
+      const { data: gastosBanca } = await sb.from('gastos')
+        .select('*, categorias(nombre,color)')
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('tipo', 'operativo');
+      const totalGastosBanca = (gastosBanca||[]).reduce((s,g)=>s+g.monto,0);
+
+      const totals = {
+        ventas: vtas, premios: prem,
+        resultado: result, comisiones: com,
+        resultado_loteria: resNeto,
+        gastos_op: totalGastosBanca, total_gastos: totalGastosBanca,
+        resultado_periodo: resNeto - totalGastosBanca,
+        gasto_participacion: 0,
+        resultado_neto_central: resNeto - totalGastosBanca
+      };
+
+      // ── MOVIMIENTOS DE SEMANA de esta banca específica ──
+      const { data: movSemana } = await sb.from('prestamos')
+        .select('*')
+        .eq('grupo_id', cuadreGrupoId.value)
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .order('fecha').order('created_at');
+      const movSalidas  = (movSemana||[]).filter(p=>p.tipo==='salida').reduce((s,p)=>s+p.monto,0);
+      const movEntradas = (movSemana||[]).filter(p=>p.tipo==='entrada').reduce((s,p)=>s+p.monto,0);
+      const movNeto = movSalidas - movEntradas;
+
+      cuadreData.value = {
+        grupo, periodo,
+        banca,
+        esBancaIndividual: true,
+        bancas: banca ? [{ ...banca, ventas: vtas, premios: prem, resultado: result,
+          comision: com, resultado_neto: resNeto,
+          gastos_op: totalGastosBanca, total_gastos: totalGastosBanca,
+          resultado_periodo: resNeto - totalGastosBanca }] : [],
+        totals,
+        movimientos: movSemana || [], movSalidas, movEntradas, movNeto,
+        editando: !!cuadreExistente,
+        gastosOperativos: (gastosBanca||[]).map(g=>({
+          ...g,
+          _bancaNombre: banca?.nombre || null,
+          _bancaCodigo: banca?.codigo || null
+        }))
+      };
+
+      if (cuadreExistente) {
+        balanceAnteriorManual.value = false;
+        arrastrePartManual.value = false;
+        cuadreFrm.value = {
+          balance_anterior:      cuadreExistente.balance_pendiente_anterior || 0,
+          entregado_supervisor:  movSalidas,  // siempre desde movimientos reales
+          entregado_central:     movEntradas, // siempre desde movimientos reales
+          depositado:            cuadreExistente.depositado || 0,
+          arrastre_participacion:cuadreExistente.arrastre_participacion || 0,
+          participacion_pagada:  cuadreExistente.participacion_pagada || 0,
+          notas:                 cuadreExistente.notas || ''
+        };
+        // Reconstruir totals desde campos del schema existente
+        const vtas2  = cuadreExistente.ventas  || 0;
+        const prem2  = cuadreExistente.premios || 0;
+        const com2   = cuadreExistente.comision || 0;
+        const resP2  = cuadreExistente.resultado_periodo || 0;
+        cuadreData.value.totals.ventas = vtas2;
+        cuadreData.value.totals.premios = prem2;
+        cuadreData.value.totals.comisiones = com2;
+        cuadreData.value.totals.resultado_periodo = resP2;
+      } else {
+        cuadreFrm.value = {
+          balance_anterior:      balanceAnteriorAuto,
+          entregado_supervisor:  movSalidas,
+          entregado_central:     movEntradas,
+          depositado:            0,
+          arrastre_participacion:arrastrePartAuto,
+          participacion_pagada:  0,
+          notas:                 ''
+        };
+      }
+    }
+
+    async function saveCuadreBanca() {
+      if (!sb || !cuadreData.value) return;
+      savingCuadre.value = true;
+      const t = cuadreData.value.totals;
+      const f = cuadreFrm.value;
+      const banca = cuadreData.value.banca;
+      const pctPart = banca?.porcentaje_participacion || 0;
+
+      // Recalcular participación con arrastre
+      const basePartic = (f.arrastre_participacion || 0) + t.resultado_periodo;
+      const partCalc   = basePartic > 0 ? Math.round(basePartic * pctPart / 100) : 0;
+
+      const totalAcum   = f.balance_anterior + t.resultado_periodo;
+      const totalDep    = totalAcum + f.entregado_supervisor - f.entregado_central;
+      const montoEnt    = totalDep - partCalc;
+      const balanceFin  = montoEnt - f.depositado;
+
+      const record = {
+        grupo_id:   cuadreGrupoId.value,
+        banca_id:   cuadreBancaId.value,
+        periodo_id: cuadrePeriodoId.value,
+        // Nombres según schema existente en Supabase
+        ventas:           t.ventas,
+        premios:          t.premios,
+        comision:         t.comisiones,
+        porcentaje_comision: banca?.porcentaje_comision || 0,
+        resultado:        t.resultado,
+        resultado_neto:   t.resultado_loteria,
+        total_gastos:     partCalc,
+        resultado_loteria: t.resultado_periodo,
+        resultado_periodo: t.resultado_periodo,
+        // Campos de cuadre/balance (añadidos via ALTER)
+        balance_pendiente_anterior: f.balance_anterior,
+        total_acumulado: totalAcum,
+        entregado_supervisor: f.entregado_supervisor,
+        entregado_central:    f.entregado_central,
+        total_a_depositar: totalDep,
+        depositado:    f.depositado,
+        balance_final: balanceFin,
+        arrastre_participacion: f.arrastre_participacion,
+        porcentaje_participacion: pctPart,
+        participacion_pagada: f.participacion_pagada,
+        notas: f.notas
+      };
+
+      const { error } = await sb.from('cuadres_banca').upsert(record,
+        { onConflict: 'banca_id,periodo_id' });
+      if (error) { toast('Error: ' + error.message, 'error'); savingCuadre.value = false; return; }
+
+      // Guardar participación individual de esta banca
+      let arrSig;
+      if (basePartic <= 0) {
+        arrSig = basePartic;
+      } else {
+        const pendiente = partCalc - (f.participacion_pagada || 0);
+        arrSig = pendiente > 0 ? pendiente : 0;
+      }
+      await sb.from('participacion_acumulada').upsert({
+        grupo_id:   cuadreGrupoId.value,
+        banca_id:   cuadreBancaId.value,
+        periodo_id: cuadrePeriodoId.value,
+        beneficio_semana: t.resultado_periodo,
+        arrastre_anterior: f.arrastre_participacion,
+        balance_participacion: basePartic,
+        porcentaje: pctPart,
+        monto_a_pagar: partCalc,
+        pagado: f.participacion_pagada || 0,
+        arrastre_siguiente: arrSig
+      }, { onConflict: 'grupo_id,banca_id,periodo_id' });
+
+      // ── REGISTRAR GASTO DE PARTICIPACIÓN EN TABLA GASTOS (banca individual) ──
+      await sb.from('gastos')
+        .delete()
+        .eq('grupo_id', cuadreGrupoId.value)
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .eq('tipo', 'participacion');
+      if (partCalc > 0) {
+        const catPart1 = categorias.value.find(c => c.tipo==='egreso' && c.nombre?.toLowerCase().includes('participac'));
+        await sb.from('gastos').insert({
+          grupo_id:     cuadreGrupoId.value,
+          banca_id:     cuadreBancaId.value,
+          periodo_id:   cuadrePeriodoId.value,
+          tipo:         'participacion',
+          categoria_id: catPart1?.id || null,
+          concepto:     `Participación ${pctPart}% — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto:        partCalc,
+          fecha:        cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0]
+        });
+      }
+
+      // ── AUTO-REGISTRAR DEPÓSITO EN FLUJO DE EFECTIVO (banca individual) ──
+      await sb.from('flujo_efectivo')
+        .delete()
+        .eq('grupo_id', cuadreGrupoId.value)
+        .eq('banca_id', cuadreBancaId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .eq('origen', 'cuadre');
+      if (f.depositado > 0) {
+        // Banca entrega dinero → ingreso en flujo
+        const catIngreso = categorias.value.find(c=>c.nombre?.includes('Depósito Supervisor') || (c.tipo==='ingreso' && c.nombre?.toLowerCase().includes('cuadre')));
+        await sb.from('flujo_efectivo').insert({
+          fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
+          tipo: 'ingreso',
+          concepto: `Depósito cuadre — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto: f.depositado,
+          categoria_id: catIngreso?.id || null,
+          grupo_id: cuadreGrupoId.value,
+          banca_id: cuadreBancaId.value,
+          periodo_id: cuadrePeriodoId.value,
+          origen: 'cuadre'
+        });
+      } else if (f.depositado < 0) {
+        // Banca perdió → central entrega dinero → egreso en flujo
+        // Buscar categoría "Pago Cuadre Perdida", crearla si no existe
+        let catPerdida = categorias.value.find(c=>c.nombre === 'Perdida Cuadre');
+        if (!catPerdida) {
+          const { data: newCat } = await sb.from('categorias').insert({
+            nombre: 'Perdida Cuadre', tipo: 'egreso', color: '#ff4d6d', activo: true
+          }).select().single();
+          if (newCat) { categorias.value.push(newCat); catPerdida = newCat; }
+        }
+        await sb.from('flujo_efectivo').insert({
+          fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
+          tipo: 'egreso',
+          concepto: `Perdida Cuadre — ${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto: Math.abs(f.depositado),
+          categoria_id: catPerdida?.id || null,
+          grupo_id: cuadreGrupoId.value,
+          banca_id: cuadreBancaId.value,
+          periodo_id: cuadrePeriodoId.value,
+          origen: 'cuadre'
+        });
+      }
+
+      toast('✅ Cuadre de banca guardado', 'success');
+      savingCuadre.value = false;
+      await loadCuadreBanca();
+    }
+
+    async function saveCuadre() {
+      if (!sb || !cuadreData.value) return;
+      // Si es banca individual, usar saveCuadreBanca
+      if (cuadreData.value.esBancaIndividual) return saveCuadreBanca();
+      savingCuadre.value = true;
+      const t = cuadreData.value.totals;
+      const f = cuadreFrm.value;
+      const record = {
+        grupo_id: cuadreGrupoId.value,
+        periodo_id: cuadrePeriodoId.value,
+        total_ventas: t.ventas,
+        total_premios: t.premios,
+        total_comisiones: t.comisiones,
+        total_gastos: t.total_gastos,
+        resultado_loteria: t.resultado_periodo,
+        balance_pendiente_anterior: f.balance_anterior,
+        total_acumulado: f.balance_anterior + t.resultado_periodo,
+        entregado_supervisor: f.entregado_supervisor,
+        entregado_central: f.entregado_central,
+        total_a_depositar: calcTotalDepositar.value,
+        depositado: f.depositado,
+        balance_final: calcBalanceFinal.value,
+        arrastre_participacion: f.arrastre_participacion,
+        base_participacion: calcBaseParticipacion.value,
+        porcentaje_participacion: cuadreData.value.grupo?.porcentaje_participacion || 0,
+        participacion_pagada: f.participacion_pagada,
+        notas: f.notas
+      };
+      const { error } = await sb.from('cuadres_grupo').upsert(record, {
+        onConflict: 'grupo_id,periodo_id'
+      });
+      if (error) { toast('Error al guardar: ' + error.message, 'error'); savingCuadre.value = false; return; }
+
+      // Auto-registrar gasto de participación si corresponde
+      // Usa calcParticipacion (reactivo, considera arrastre) no t.gasto_participacion (estático)
+      if (calcParticipacion.value > 0) {
+        // Eliminar el gasto anterior de participación para este grupo/período si existe
+        await sb.from('gastos')
+          .delete()
+          .eq('grupo_id', cuadreGrupoId.value)
+          .eq('periodo_id', cuadrePeriodoId.value)
+          .eq('tipo', 'participacion');
+        // Insertar el nuevo gasto de participación
+        const catPart2 = categorias.value.find(c => c.tipo==='egreso' && c.nombre?.toLowerCase().includes('participac'));
+        await sb.from('gastos').insert({
+          grupo_id:     cuadreGrupoId.value,
+          periodo_id:   cuadrePeriodoId.value,
+          tipo:         'participacion',
+          categoria_id: catPart2?.id || null,
+          concepto:     `Participación ${cuadreData.value.grupo?.porcentaje_participacion || 0}% — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto:        calcParticipacion.value,
+          fecha:        cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0]
+        });
+      }
+
+      // Guardar participación
+      // arrastre_siguiente = lo que queda pendiente para la próxima semana
+      // Si base <= 0: arrastra el déficit (semana negativa)
+      // Si base > 0 y pagó la participación: queda en 0 (limpio)
+      // Si base > 0 y NO pagó (o pagó parcial): arrastra lo que falta
+      let arrSig;
+      if (calcBaseParticipacion.value <= 0) {
+        arrSig = calcBaseParticipacion.value; // arrastra déficit
+      } else {
+        const pendiente = calcParticipacion.value - (f.participacion_pagada || 0);
+        arrSig = pendiente > 0 ? pendiente : 0; // si pagó completo → 0
+      }
+      await sb.from('participacion_acumulada').upsert({
+        grupo_id: cuadreGrupoId.value,
+        periodo_id: cuadrePeriodoId.value,
+        beneficio_semana: t.resultado_periodo,
+        arrastre_anterior: f.arrastre_participacion,
+        balance_participacion: calcBaseParticipacion.value,
+        porcentaje: cuadreData.value.grupo?.porcentaje_participacion || 0,
+        monto_a_pagar: calcParticipacion.value,
+        pagado: f.participacion_pagada || 0,
+        arrastre_siguiente: arrSig
+      }, { onConflict: 'grupo_id,periodo_id' });
+      // ── AUTO-REGISTRAR DEPÓSITO EN FLUJO DE EFECTIVO ──
+      // Primero eliminar registros previos de este cuadre (evita duplicados al re-guardar)
+      await sb.from('flujo_efectivo')
+        .delete()
+        .eq('grupo_id', cuadreGrupoId.value)
+        .eq('periodo_id', cuadrePeriodoId.value)
+        .eq('origen', 'cuadre');
+      if (f.depositado > 0) {
+        const catIngreso = categorias.value.find(c=>c.nombre?.includes('Depósito Supervisor') || (c.tipo==='ingreso' && c.nombre?.toLowerCase().includes('cuadre')));
+        await sb.from('flujo_efectivo').insert({
+          fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
+          tipo: 'ingreso',
+          concepto: `Depósito cuadre — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto: f.depositado,
+          categoria_id: catIngreso?.id || null,
+          grupo_id: cuadreGrupoId.value,
+          periodo_id: cuadrePeriodoId.value,
+          origen: 'cuadre'
+        });
+      } else if (f.depositado < 0) {
+        // Grupo cerró en pérdida — central entrega dinero al supervisor → egreso
+        let catPerdida = categorias.value.find(c => c.nombre === 'Perdida Cuadre');
+        if (!catPerdida) {
+          const { data: newCat } = await sb.from('categorias').insert({
+            nombre: 'Perdida Cuadre', tipo: 'egreso', color: '#ff4d6d', activo: true
+          }).select().single();
+          if (newCat) { categorias.value.push(newCat); catPerdida = newCat; }
+        }
+        await sb.from('flujo_efectivo').insert({
+          fecha: cuadreData.value.periodo?.fecha_fin || cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
+          tipo: 'egreso',
+          concepto: `Perdida Cuadre — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto: Math.abs(f.depositado),
+          categoria_id: catPerdida?.id || null,
+          grupo_id: cuadreGrupoId.value,
+          periodo_id: cuadrePeriodoId.value,
+          origen: 'cuadre'
+        });
+      }
+      // Si se entregaron avances mid-week (salidas), registrar en flujo como egreso
+      if (cuadreData.value.movNeto > 0) {
+        const catEgreso = categorias.value.find(c=>c.nombre?.includes('Préstamo Otorgado') || (c.tipo==='egreso' && c.nombre?.toLowerCase().includes('préstamo')));
+        // Solo registrar si el neto de salidas > 0 (se dio más de lo que se recibió)
+        await sb.from('flujo_efectivo').upsert({
+          fecha: cuadreData.value.periodo?.fecha_inicio || new Date().toISOString().split('T')[0],
+          tipo: 'egreso',
+          concepto: `Avances/movimientos semana — ${cuadreData.value.grupo?.nombre} — ${cuadreData.value.periodo?.descripcion || ''}`,
+          monto: cuadreData.value.movNeto,
+          categoria_id: catEgreso?.id || null,
+          grupo_id: cuadreGrupoId.value,
+          periodo_id: cuadrePeriodoId.value,
+          origen: 'cuadre'
+        });
+      }
+
+      toast('✅ Cuadre guardado correctamente', 'success');
+      savingCuadre.value = false;
+      // Recargar el cuadre para reflejar modo "editar"
+      await loadCuadre();
+    }
+
+    // ══════════════════════════════════════════
+    // GASTOS
+    // ══════════════════════════════════════════
+    const gastos = ref([]);
+    const loadingGastos = ref(false);
+    const showGastoModal = ref(false);
+    const gastoFiltro = ref({ periodo_id: '', grupo_id: '' });
+    const gastoFrm = ref({ periodo_id:'', grupo_id:'', banca_id:'', tipo:'operativo', concepto:'', monto:0, fecha: new Date().toISOString().split('T')[0], categoria_id:'' });
+    const gastoEditId = ref(null);
+    function abrirNuevoGasto(preGrupoId='', prePeriodoId='') {
+      gastoEditId.value = null;
+      gastoFrm.value = {
+        periodo_id: prePeriodoId || '',
+        grupo_id:   preGrupoId   || '',
+        banca_id:   '',
+        tipo:       'operativo',
+        concepto:   '',
+        monto:      0,
+        fecha:      new Date().toISOString().split('T')[0],
+        categoria_id: ''
+      };
+      showGastoModal.value = true;
+    }
+    function editarGasto(g) {
+      gastoEditId.value = g.id;
+      gastoFrm.value = {
+        periodo_id: g.periodo_id||'', grupo_id: g.grupo_id||'', banca_id: g.banca_id||'',
+        tipo: g.tipo||'operativo', concepto: g.concepto||'', monto: g.monto||0,
+        fecha: g.fecha||new Date().toISOString().split('T')[0], categoria_id: g.categoria_id||''
+      };
+      showGastoModal.value = true;
+    }
+
+    async function loadGastos() {
+      if (!sb) return;
+      loadingGastos.value = true;
+      let q = sb.from('gastos').select('*, grupos(nombre), bancas(nombre)').order('fecha', { ascending: false });
+      if (gastoFiltro.value.periodo_id) q = q.eq('periodo_id', gastoFiltro.value.periodo_id);
+      if (gastoFiltro.value.grupo_id) q = q.eq('grupo_id', gastoFiltro.value.grupo_id);
+      const { data } = await q;
+      gastos.value = data || [];
+      loadingGastos.value = false;
+    }
+    async function saveGasto() {
+      if (!sb) return;
+      const g = {...gastoFrm.value};
+      if (!g.grupo_id) delete g.grupo_id;
+      if (!g.banca_id) delete g.banca_id;
+      if (!g.periodo_id) delete g.periodo_id;
+      if (!g.categoria_id) delete g.categoria_id;
+      let error;
+      if (gastoEditId.value) {
+        ({ error } = await sb.from('gastos').update(g).eq('id', gastoEditId.value));
+      } else {
+        ({ error } = await sb.from('gastos').insert(g));
+      }
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+      toast(gastoEditId.value ? 'Gasto actualizado ✓' : 'Gasto registrado ✓', 'success');
+      showGastoModal.value = false;
+      gastoEditId.value = null;
+      gastoFrm.value = { periodo_id:'', grupo_id:'', banca_id:'', tipo:'operativo', concepto:'', monto:0, fecha: new Date().toISOString().split('T')[0], categoria_id:'' };
+      loadGastos();
+      // Si hay un cuadre abierto en pantalla, recargarlo para reflejar el gasto
+      if (cuadreData.value) {
+        await loadCuadre();
+      }
+    }
+    async function deleteGasto(id) {
+      if (!await confirmDialog('¿Eliminar gasto?', 'Esta acción no se puede deshacer.')) return;
+      await sb.from('gastos').delete().eq('id', id);
+      loadGastos();
+    }
+    function tipoGastoColor(t) {
+      const m = { operativo:'blue', central:'yellow', sistema:'green', equipo:'gray', otro:'gray', participacion:'red' };
+      return m[t] || 'gray';
+    }
+
+    // ══════════════════════════════════════════
+    // PRÉSTAMOS
+    // ══════════════════════════════════════════
+    const prestamos = ref([]);
+    const loadingPrest = ref(false);
+    const showPrestamoModal = ref(false);
+    const prestFiltro = ref({ grupo_id: '', periodo_id: '' });
+    const prestFrm = ref({ grupo_id:'', banca_id:'', periodo_id:'', tipo:'salida', monto:0, concepto:'', fecha: new Date().toISOString().split('T')[0] });
+    const prestEditId = ref(null);
+    function abrirNuevoPrestamo() {
+      prestEditId.value = null;
+      prestFrm.value = { grupo_id:'', periodo_id:'', tipo:'salida', monto:0, concepto:'', fecha: new Date().toISOString().split('T')[0] };
+      showPrestamoModal.value = true;
+    }
+    function editarPrestamo(p) {
+      prestEditId.value = p.id;
+      prestFrm.value = {
+        grupo_id: p.grupo_id||'', periodo_id: p.periodo_id||'',
+        tipo: p.tipo||'salida', monto: p.monto||0,
+        concepto: p.concepto||'', fecha: p.fecha||new Date().toISOString().split('T')[0]
+      };
+      showPrestamoModal.value = true;
+    }
+    const prestamosResumen = computed(() => {
+      const map = {};
+      grupos.value.forEach(g => { map[g.id] = { grupo_id: g.id, nombre: g.nombre, salidas: 0, entradas: 0 }; });
+      prestamos.value.forEach(p => {
+        if (!map[p.grupo_id]) return;
+        if (p.tipo === 'salida') map[p.grupo_id].salidas += p.monto;
+        else map[p.grupo_id].entradas += p.monto;
+      });
+      return Object.values(map).filter(g=>g.salidas>0||g.entradas>0).map(g=>({...g, saldo: g.salidas - g.entradas}));
+    });
+
+    async function loadPrestamos() {
+      if (!sb) return;
+      loadingPrest.value = true;
+      let q = sb.from('prestamos').select('*, grupos(nombre), periodos(descripcion, fecha_inicio), bancas(codigo, nombre)').order('fecha', { ascending: false });
+      if (prestFiltro.value.grupo_id)  q = q.eq('grupo_id',  prestFiltro.value.grupo_id);
+      if (prestFiltro.value.periodo_id) q = q.eq('periodo_id', prestFiltro.value.periodo_id);
+      const { data } = await q;
+      prestamos.value = data || [];
+      loadingPrest.value = false;
+    }
+    async function savePrestamo() {
+      if (!sb) return;
+      const p = {...prestFrm.value};
+      if (!p.periodo_id) delete p.periodo_id;
+      let error;
+      if (prestEditId.value) {
+        ({ error } = await sb.from('prestamos').update(p).eq('id', prestEditId.value));
+      } else {
+        ({ error } = await sb.from('prestamos').insert(p));
+      }
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+      toast(prestEditId.value ? 'Movimiento actualizado ✓' : 'Movimiento registrado ✓', 'success');
+      showPrestamoModal.value = false;
+      prestEditId.value = null;
+      prestFrm.value = { grupo_id:'', banca_id:'', periodo_id:'', tipo:'salida', monto:0, concepto:'', fecha: new Date().toISOString().split('T')[0] };
+      loadPrestamos();
+    }
+    async function deletePrestamo(id) {
+      if (!await confirmDialog('¿Eliminar movimiento?', 'Esta acción no se puede deshacer.')) return;
+      await sb.from('prestamos').delete().eq('id', id);
+      loadPrestamos();
+    }
+
+    // ══════════════════════════════════════════
+    // PARTICIPACIÓN
+    // ══════════════════════════════════════════
+    const participacion = ref([]);
+    const loadingPart = ref(false);
+    const partFiltro = ref({ grupo_id: '', periodo_id: '' });
+
+    async function loadParticipacion() {
+      if (!sb) return;
+      loadingPart.value = true;
+      let q = sb.from('participacion_acumulada')
+        .select('*, grupos(nombre), periodos(descripcion, fecha_inicio), bancas(codigo, nombre)')
+        .order('created_at', { ascending: false });
+      if (partFiltro.value.grupo_id)  q = q.eq('grupo_id',  partFiltro.value.grupo_id);
+      if (partFiltro.value.periodo_id) q = q.eq('periodo_id', partFiltro.value.periodo_id);
+      const { data } = await q;
+      participacion.value = data || [];
+      loadingPart.value = false;
+    }
+
+    // Agrupa participación: una fila resumen por grupo+periodo, con bancas individuales como detalle
+    const participacionAgrupada = Vue.computed(() => {
+      const map = {};
+      for (const p of participacion.value) {
+        const key = (p.grupo_id || '') + '|' + (p.periodo_id || '');
+        const grupoModo = grupos.value.find(g=>g.id===p.grupo_id)?.modo || 'estandar';
+        if (grupoModo === 'individual_bancas') {
+          // Grupo Capital — siempre agrupar en una sola fila resumen
+          if (!map[key]) {
+            map[key] = {
+              _key: key, grupo_id: p.grupo_id, periodo_id: p.periodo_id,
+              grupos: p.grupos, periodos: p.periodos, bancas: null,
+              esGrupoAgrupado: true,
+              beneficio_semana: 0, arrastre_anterior: 0, balance_participacion: 0,
+              porcentaje: 0, monto_a_pagar: 0, pagado: 0, arrastre_siguiente: 0,
+              _bancas: []
+            };
+          }
+          map[key].beneficio_semana      += p.beneficio_semana || 0;
+          map[key].arrastre_anterior     += p.arrastre_anterior || 0;
+          map[key].balance_participacion += p.balance_participacion || 0;
+          map[key].monto_a_pagar         += p.monto_a_pagar || 0;
+          map[key].pagado                += p.pagado || 0;
+          map[key].arrastre_siguiente    += p.arrastre_siguiente || 0;
+          // Agregar al drilldown si tiene banca identificada
+          if (p.banca_id) map[key]._bancas.push(p);
+          // Guardar grupo_id para fallback de bancas desde bancas.value
+          map[key]._grupoId = p.grupo_id;
+        } else {
+          // Grupo estándar — mostrar directo sin agrupación
+          map[key] = { ...p, esGrupoAgrupado: false, _bancas: [] };
+        }
+      }
+      return Object.values(map).sort((a,b) => {
+        const na = a.grupos?.nombre || '';
+        const nb = b.grupos?.nombre || '';
+        return na.localeCompare(nb) || (b.periodo_id||'').localeCompare(a.periodo_id||'');
+      });
+    });
+
+    // ══════════════════════════════════════════
+    // CUENTA BANCO
+    // ══════════════════════════════════════════
+    const bancoMovs = ref([]);
+    const loadingBanco = ref(false);
+    const showBancoModal = ref(false);
+    const bancoEditId    = ref(null);
+    const bancoFiltro = ref({ desde: '', hasta: '', tipo: '', grupo_id: '' });
+    const bancoFrm = ref({ fecha: new Date().toISOString().split('T')[0], tipo:'ingreso', concepto:'', monto:0, referencia:'', grupo_id:'', periodo_id:'', categoria_id:'' });
+    const bancoStats = computed(() => ({
+      saldo: bancoMovs.value.length ? (bancoMovs.value[bancoMovs.value.length-1]?.saldo_acumulado || 0) : 0,
+      ingresos: bancoMovs.value.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+m.monto,0),
+      egresos: bancoMovs.value.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+m.monto,0),
+    }));
+
+    async function loadBanco() {
+      if (!sb) return;
+      loadingBanco.value = true;
+      let q = sb.from('cuenta_banco').select('*, grupos(nombre), categorias(nombre)').order('fecha').order('created_at');
+      if (bancoFiltro.value.desde) q = q.gte('fecha', bancoFiltro.value.desde);
+      if (bancoFiltro.value.hasta) q = q.lte('fecha', bancoFiltro.value.hasta);
+      if (bancoFiltro.value.tipo) q = q.eq('tipo', bancoFiltro.value.tipo);
+      if (bancoFiltro.value.grupo_id) q = q.eq('grupo_id', bancoFiltro.value.grupo_id);
+      const { data } = await q;
+      // Calcular saldo acumulado
+      let saldo = 0;
+      bancoMovs.value = (data || []).map(m => {
+        saldo += m.tipo === 'ingreso' ? m.monto : -m.monto;
+        return { ...m, saldo_acumulado: saldo };
+      });
+      loadingBanco.value = false;
+    }
+    function editarBanco(m) {
+      bancoEditId.value = m.id;
+      bancoFrm.value = {
+        fecha:       m.fecha       || new Date().toISOString().split('T')[0],
+        tipo:        m.tipo        || 'ingreso',
+        concepto:    m.concepto    || '',
+        monto:       m.monto       || 0,
+        referencia:  m.referencia  || '',
+        grupo_id:    m.grupo_id    || '',
+        periodo_id:  m.periodo_id  || '',
+        categoria_id: m.categoria_id || ''
+      };
+      showBancoModal.value = true;
+    }
+    async function saveBanco() {
+      if (!sb) return;
+      if (!bancoFrm.value.concepto || !bancoFrm.value.monto) {
+        toast('Completa el concepto y el monto', 'error'); return;
+      }
+      const m = {...bancoFrm.value};
+      if (!m.grupo_id) delete m.grupo_id;
+      if (!m.periodo_id) delete m.periodo_id;
+      if (!m.categoria_id) delete m.categoria_id;
+      let error;
+      if (bancoEditId.value) {
+        ({ error } = await sb.from('cuenta_banco').update(m).eq('id', bancoEditId.value));
+      } else {
+        ({ error } = await sb.from('cuenta_banco').insert(m));
+      }
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+      toast(bancoEditId.value ? 'Movimiento actualizado ✓' : 'Movimiento guardado ✓', 'success');
+      showBancoModal.value = false;
+      bancoEditId.value = null;
+      bancoFrm.value = { fecha: new Date().toISOString().split('T')[0], tipo:'ingreso', concepto:'', monto:0, referencia:'', grupo_id:'', periodo_id:'', categoria_id:'' };
+      loadBanco();
+    }
+    async function deleteBanco(id) {
+      if (!await confirmDialog('¿Eliminar movimiento bancario?', 'Esta acción no se puede deshacer.')) return;
+      await sb.from('cuenta_banco').delete().eq('id', id);
+      loadBanco();
+    }
+
+    // ══════════════════════════════════════════
+    // IMPORTAR VENTAS
+    // ══════════════════════════════════════════
+    const importPeriodoId = ref('');
+    const importPreview = ref([]);
+    const importando = ref(false);
+    const importDuplicado = ref(false);
+    const importDuplicadoCount = ref(0);
+    const manualVenta = ref({ periodo_id:'', banca_id:'', ventas:0, premios:0 });
+
+    // ── Detectar si el período ya tiene data ──
+    const importPeriodoTieneData = ref(false);
+    async function checkImportDuplicado() {
+      importDuplicado.value = false;
+      importPeriodoTieneData.value = false;
+      importDuplicadoCount.value = 0;
+      importPreview.value = [];
+      if (!sb || !importPeriodoId.value) return;
+      const { count } = await sb.from('ventas_semana')
+        .select('id', { count: 'exact', head: true })
+        .eq('periodo_id', importPeriodoId.value);
+      if (count > 0) {
+        importDuplicado.value = true;
+        importPeriodoTieneData.value = true;
+        importDuplicadoCount.value = count;
+      }
+    }
+
+    // ── Borrar importación anterior ──
+    async function borrarImportacion() {
+      if (!sb || !importPeriodoId.value) return;
+      const periodo = periodos.value.find(p=>p.id===importPeriodoId.value);
+      const ok = await confirmDialog(
+        '¿Borrar datos de este período?',
+        `Se eliminarán TODOS los registros de ventas del período "${periodo?.descripcion||periodo?.fecha_inicio}". Esta acción no se puede deshacer.`,
+        '🗑️ Sí, borrar', 'warning'
+      );
+      if (!ok) return;
+      const { error } = await sb.from('ventas_semana').delete().eq('periodo_id', importPeriodoId.value);
+      if (error) { toast('Error al borrar: ' + error.message, 'error'); return; }
+      toast('Datos del período eliminados ✓', 'success');
+      importDuplicado.value = false;
+      importPeriodoTieneData.value = false;
+      importDuplicadoCount.value = 0;
+    }
+
+    // ── Parsear fila del Excel — solo Usuario, Ventas, Premios ──
+    function parseNum(v) {
+      if (v === null || v === undefined || v === '') return 0;
+      return parseFloat(String(v).replace(/[$,\s]/g,'').replace(/[()]/g,'').trim()) || 0;
+    }
+    function mapRow(row) {
+      const usuario = String(row['Usuario'] || row['usuario'] || '').trim();
+      const agencia = String(row['Agencia'] || row['agencia'] || '').trim();
+      const grupo   = String(row['Grupo']   || row['grupo']   || '').trim();
+      const ventas  = parseNum(row['Ventas']  || row['ventas']);
+      const premios = parseNum(row['Premios'] || row['premios']);
+      if (!usuario && !agencia) return null;
+      if (ventas === 0 && premios === 0) return null;
+      // Buscar banca: por usuario_sistema, luego por código, luego por nombre parcial
+      let banca = bancas.value.find(b => b.usuario_sistema && b.usuario_sistema === usuario);
+      if (!banca) banca = bancas.value.find(b => b.codigo === usuario);
+      if (!banca && agencia) banca = bancas.value.find(b =>
+        b.nombre.toLowerCase().replace(/\s+/g,'').includes(agencia.toLowerCase().replace(/\s+/g,'').substring(0,6))
+      );
+      return { usuario, agencia, grupo, ventas, premios, _banca: banca||null, _incluir: !!banca };
+    }
+
+    // ── Manejar archivo xlsx o csv ──
+    function handleFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (ext === 'xlsx' || ext === 'xls') {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const wb = XLSX.read(ev.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+          importPreview.value = rows.map(mapRow).filter(r => r !== null);
+        };
+        reader.readAsArrayBuffer(file);
+      } else {
+        Papa.parse(file, {
+          header: true, skipEmptyLines: true,
+          complete(results) {
+            importPreview.value = results.data.map(mapRow).filter(r => r !== null);
+          }
+        });
+      }
+    }
+
+    // ── Confirmar e importar ──
+    async function processImport() {
+      if (!sb || !importPeriodoId.value || !importPreview.value.length) return;
+      const filas = importPreview.value.filter(r => r._banca && r._incluir);
+      if (!filas.length) { toast('No hay filas válidas para importar', 'error'); return; }
+      importando.value = true;
+      let ok = 0; let err = 0;
+      for (const row of filas) {
+        const { error } = await sb.from('ventas_semana').upsert({
+          banca_id:   row._banca.id,
+          periodo_id: importPeriodoId.value,
+          grupo_id:   row._banca.grupo_id || null,
+          ventas:     row.ventas,
+          premios:    row.premios,
+        }, { onConflict: 'banca_id,periodo_id' });
+        if (error) err++;
+        else ok++;
+      }
+      importando.value = false;
+      const noMapeadas = importPreview.value.filter(r=>!r._banca).length;
+      toast(`✅ ${ok} bancas importadas${err?` | ⚠️ ${err} errores`:''}${noMapeadas?` | ℹ️ ${noMapeadas} sin mapear`:''}`, ok>0?'success':'error');
+      if (ok > 0) {
+        importPreview.value = [];
+        await checkImportDuplicado();
+      }
+    }
+
+    async function saveManualVenta() {
+      if (!sb) return;
+      const b = bancas.value.find(b=>b.id===manualVenta.value.banca_id);
+      const { error } = await sb.from('ventas_semana').upsert({
+        banca_id:   manualVenta.value.banca_id,
+        periodo_id: manualVenta.value.periodo_id,
+        grupo_id:   b?.grupo_id || null,
+        ventas:     manualVenta.value.ventas,
+        premios:    manualVenta.value.premios,
+      }, { onConflict: 'banca_id,periodo_id' });
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+      toast('Venta guardada', 'success');
+      manualVenta.value = { periodo_id:'', banca_id:'', ventas:0, premios:0 };
+    }
+
+    // ── MOVIMIENTO RÁPIDO DESDE CUADRE ──
+    const showMovRapido = ref(false);
+    const movRapidoFrm = ref({ fecha: new Date().toISOString().split('T')[0], tipo:'salida', monto:0, concepto:'' });
+
+    function abrirMovRapido() {
+      movRapidoFrm.value = {
+        fecha: new Date().toISOString().split('T')[0],
+        tipo: 'salida', monto: 0, concepto: ''
+      };
+      showMovRapido.value = true;
+    }
+
+    async function saveMovRapido() {
+      if (!sb || !cuadreData.value) return;
+      if (!movRapidoFrm.value.monto || movRapidoFrm.value.monto <= 0) {
+        toast('Ingresa un monto válido', 'error'); return;
+      }
+      const { error } = await sb.from('prestamos').insert({
+        grupo_id:  cuadreGrupoId.value,
+        periodo_id: cuadrePeriodoId.value,
+        banca_id:  cuadreData.value.esBancaIndividual ? cuadreBancaId.value : null,
+        tipo:      movRapidoFrm.value.tipo,
+        monto:     movRapidoFrm.value.monto,
+        concepto:  movRapidoFrm.value.concepto,
+        fecha:     movRapidoFrm.value.fecha
+      });
+      if (error) { toast('Error: ' + error.message, 'error'); return; }
+
+      // ── REGISTRAR EN FLUJO DE EFECTIVO ──
+      const esSalida = movRapidoFrm.value.tipo === 'salida';
+      const catFlujo = categorias.value.find(c =>
+        esSalida
+          ? (c.tipo==='egreso' && (c.nombre?.toLowerCase().includes('préstamo') || c.nombre?.toLowerCase().includes('avance')))
+          : (c.tipo==='ingreso' && c.nombre?.toLowerCase().includes('devolución'))
+      );
+      const bancaNom = cuadreData.value.esBancaIndividual
+        ? `${cuadreData.value.banca?.codigo} ${cuadreData.value.banca?.nombre} — `
+        : '';
+      await sb.from('flujo_efectivo').insert({
+        fecha:        movRapidoFrm.value.fecha,
+        tipo:         esSalida ? 'egreso' : 'ingreso',
+        concepto:     `${esSalida ? 'Préstamo/Avance' : 'Devolución'} — ${bancaNom}${cuadreData.value.grupo?.nombre} — ${movRapidoFrm.value.concepto || ''}`,
+        monto:        movRapidoFrm.value.monto,
+        categoria_id: catFlujo?.id || null,
+        grupo_id:     cuadreGrupoId.value,
+        banca_id:     cuadreData.value.esBancaIndividual ? cuadreBancaId.value : null,
+        periodo_id:   cuadrePeriodoId.value,
+        origen:       'prestamo'
+      });
+
+      toast('Movimiento registrado ✓', 'success');
+      showMovRapido.value = false;
+      // Recargar el cuadre para reflejar el nuevo movimiento
+      await loadCuadre();
+    }
+
+    // Función para ir al cuadre de un grupo desde el resumen
+    function irACuadre(r) {
+      cuadreGrupoId.value = r.grupo_id || r.grupos_id;
+      cuadrePeriodoId.value = selectedPeriodoId.value;
+      cuadreData.value = null;
+      view.value = 'cuadre';
+      // Auto-cargar después de render
+      setTimeout(() => loadCuadre(), 200);
+    }
+
+    // ══════════════════════════════════════════
+    // REPORTE IMPRIMIBLE
+    // ══════════════════════════════════════════
+    const showReporte = ref(false);
+
+    function printReport() {
+      if (!cuadreData.value) return;
+      const d = cuadreData.value;
+      const f = cuadreFrm.value;
+      const t = d.totals;
+      const fmtN = n => { const v = Number(n)||0; return (v<0?'-$':'$')+Math.abs(v).toLocaleString('es-DO',{minimumFractionDigits:0,maximumFractionDigits:0}); };
+      const totalAcum = f.balance_anterior + t.resultado_periodo;
+      const totalDep  = totalAcum + f.entregado_supervisor - f.entregado_central;
+      // Recalcular participación considerando arrastre + balance anterior (igual que calcParticipacion)
+      const basePartic = (f.arrastre_participacion || 0) + t.resultado_periodo;
+      const partCalc   = basePartic > 0 ? Math.round(basePartic * (d.grupo?.porcentaje_participacion||0) / 100) : 0;
+      const montoSup  = totalDep - partCalc;
+      const balance   = montoSup - f.depositado;
+
+      const bancaRows = d.bancas.map(b => `
+        <tr>
+          <td>${b.codigo||''}</td><td>${b.nombre||''}</td>
+          <td class="r">${fmtN(b.ventas)}</td>
+          <td class="r neg">${fmtN(b.premios)}</td>
+          <td class="r ${b.resultado<0?'neg':'pos'}">${fmtN(b.resultado)}</td>
+          <td class="r">${b.porcentaje_comision||0}%</td>
+          <td class="r neg">${fmtN(b.comision)}</td>
+          <td class="r ${b.resultado_neto<0?'neg':'pos'}">${fmtN(b.resultado_neto)}</td>
+          <td class="r neg">${fmtN(b.total_gastos)}</td>
+          <td class="r ${b.resultado_periodo<0?'neg':'pos'} bold">${fmtN(b.resultado_periodo)}</td>
+        </tr>`).join('');
+
+      const movRows = (d.movimientos||[]).map(m => `
+        <tr>
+          <td>${m.fecha||''}</td>
+          <td>${m.tipo==='salida'?'↑ Préstamo Entregado':'↓ Pago Recibido'}</td>
+          <td>${m.concepto||'-'}</td>
+          <td class="r ${m.tipo==='salida'?'neg':'pos'}">${m.tipo==='salida'?'-':'+'} ${fmtN(m.monto)}</td>
+        </tr>`).join('');
+
+      const html = `<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8">
+<title>Cuadre — ${d.grupo?.nombre||''} — ${d.periodo?.descripcion||''}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #111; padding: 20px; }
+  h1 { font-size: 16px; text-align: center; margin-bottom: 2px; }
+  h2 { font-size: 13px; text-align: center; font-weight: normal; color: #444; margin-bottom: 4px; }
+  .meta { text-align: center; font-size: 10px; color: #666; margin-bottom: 16px; }
+  .section-title { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; background: #f0f0f0; padding: 5px 8px; margin: 12px 0 0; border-left: 3px solid #111; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  th, td { padding: 4px 7px; border: 1px solid #ddd; font-size: 10px; }
+  thead { background: #f5f5f5; font-weight: bold; }
+  tfoot { background: #f0f0f0; font-weight: bold; }
+  .r { text-align: right; }
+  .pos { color: #00854a; }
+  .neg { color: #cc0033; }
+  .bold { font-weight: bold; }
+  .kv { display: flex; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid #eee; font-size: 11px; }
+  .kv.total { background: #f0f0f0; font-weight: bold; padding: 6px 8px; }
+  .kv.highlight { background: #e6f9f2; border: 1px solid #00854a; font-weight: bold; padding: 6px 8px; margin-top: 4px; }
+  .kv.balance { background: #111; color: #fff; font-weight: bold; font-size: 13px; padding: 8px; margin-top: 6px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+  .box { border: 1px solid #ddd; border-radius: 3px; overflow: hidden; }
+  .box-title { background: #333; color: #fff; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; padding: 4px 8px; }
+  .footer { text-align: center; font-size: 9px; color: #999; margin-top: 20px; border-top: 1px solid #eee; padding-top: 6px; }
+  @media print { @page { margin: 1cm; size: A4 landscape; } }
+</style>
+</head><body>
+<h1>CUADRE SEMANAL — GRUPO ${(d.grupo?.nombre||'').toUpperCase()}</h1>
+<h2>${d.periodo?.descripcion||''}</h2>
+<div class="meta">Generado: ${new Date().toLocaleDateString('es-DO',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
+
+<div class="section-title">Detalle de Bancas</div>
+<table>
+  <thead><tr>
+    <th>Cód.</th><th>Banca</th>
+    <th class="r">Ventas</th><th class="r">Premios</th><th class="r">Res. Venta</th>
+    <th class="r">%Com</th><th class="r">Comisión</th><th class="r">Res. Bruto</th>
+    <th class="r">Gastos</th><th class="r">Res. Final</th>
+  </tr></thead>
+  <tbody>${bancaRows}</tbody>
+  <tfoot><tr>
+    <td colspan="2">TOTAL</td>
+    <td class="r">${fmtN(t.ventas)}</td>
+    <td class="r neg">${fmtN(t.premios)}</td>
+    <td class="r ${t.resultado<0?'neg':'pos'}">${fmtN(t.resultado)}</td>
+    <td></td>
+    <td class="r neg">${fmtN(t.comisiones)}</td>
+    <td class="r ${t.resultado_loteria<0?'neg':'pos'}">${fmtN(t.resultado_loteria)}</td>
+    <td class="r neg">${fmtN(t.total_gastos)}</td>
+    <td class="r ${t.resultado_periodo<0?'neg':'pos'} bold">${fmtN(t.resultado_periodo)}</td>
+  </tr></tfoot>
+</table>
+
+<div class="two-col">
+  <div>
+    <div class="section-title">P&amp;L del Período</div>
+    <div class="box">
+      <div class="box-title">Resultado</div>
+      <div class="kv"><span>Ventas</span><span class="pos">${fmtN(t.ventas)}</span></div>
+      <div class="kv"><span>(-) Premios</span><span class="neg">${fmtN(t.premios)}</span></div>
+      <div class="kv total"><span>Resultado Venta</span><span class="${t.resultado<0?'neg':'pos'}">${fmtN(t.resultado)}</span></div>
+      <div class="kv"><span>(-) Comisiones</span><span class="neg">${fmtN(t.comisiones)}</span></div>
+      <div class="kv total"><span>Resultado Bruto</span><span class="${t.resultado_loteria<0?'neg':'pos'}">${fmtN(t.resultado_loteria)}</span></div>
+      <div class="kv"><span>(-) Gastos Operativos</span><span class="neg">${fmtN(t.total_gastos)}</span></div>
+      ${partCalc>0?`<div class="kv"><span>(-) Participación (${d.grupo?.porcentaje_participacion||0}%)</span><span class="neg">${fmtN(partCalc)}</span></div>`:''}
+      <div class="kv total" style="background:#e6f9f2"><span><b>RESULTADO FINAL</b></span><span class="${t.resultado_periodo<0?'neg':'pos'} bold">${fmtN(t.resultado_periodo)}</span></div>
+    </div>
+    <div class="box-title" style="margin-top:8px;background:#555">Participación Supervisor (${d.grupo?.porcentaje_participacion||0}%)</div>
+    <div class="box">
+      <div class="kv"><span>Arrastre anterior</span><span class="${(f.arrastre_participacion||0)<0?'neg':''}">${fmtN(f.arrastre_participacion||0)}</span></div>
+      <div class="kv"><span>(+) Resultado semana</span><span class="${t.resultado_periodo<0?'neg':'pos'}">${fmtN(t.resultado_periodo)}</span></div>
+      <div class="kv total"><span><b>Base acumulada</b></span><span class="${basePartic<0?'neg':'pos'}">${fmtN(basePartic)}</span></div>
+      ${partCalc>0
+        ? `<div class="kv" style="background:#fffbe6"><span>Participación a pagar (${d.grupo?.porcentaje_participacion||0}%)</span><span class="neg">${fmtN(partCalc)}</span></div>
+           <div class="kv total" style="background:#e6f9f2"><span><b>Arrastre próximo cuadre</b></span><span>$0</span></div>`
+        : `<div style="font-size:10px;color:#888;padding:6px 8px">ℹ️ Base negativa — sin pago esta semana. Arrastre próximo cuadre: <b>${fmtN(basePartic)}</b></div>`
+      }
+    </div>
+  </div>
+
+  <div>
+    <div class="section-title">Balance y Cierre</div>
+    <div class="box">
+      <div class="box-title">Movimientos de Efectivo</div>
+      <div class="kv"><span>Balance Pendiente Anterior</span><span class="${f.balance_anterior<0?'neg':''}">${fmtN(f.balance_anterior)}</span></div>
+      <div class="kv"><span>Resultado Final</span><span class="${t.resultado_periodo<0?'neg':'pos'}">${fmtN(t.resultado_periodo)}</span></div>
+      <div class="kv total"><span>Total Acumulado</span><span class="${totalAcum<0?'neg':'pos'}">${fmtN(totalAcum)}</span></div>
+      ${f.entregado_supervisor>0?`<div class="kv"><span>(+) Entregado Préstamo (a supervisor)</span><span class="neg">${fmtN(f.entregado_supervisor)}</span></div>`:''}
+      ${f.entregado_central>0?`<div class="kv"><span>(-) Transferencia Admin (de supervisor)</span><span class="pos">${fmtN(f.entregado_central)}</span></div>`:''}
+      <div class="kv total"><span>Total a Depositar / Transferir</span><span class="${totalDep<0?'neg':'pos'}">${fmtN(totalDep)}</span></div>
+      ${partCalc>0?`<div class="kv"><span>(-) Participación Supervisor</span><span>${fmtN(partCalc)}</span></div>`:''}
+      <div class="kv highlight"><span>MONTO ENTREGADO (por supervisor)</span><span class="${montoSup>=0?'pos':'neg'}">${fmtN(montoSup)}</span></div>
+      <div class="kv"><span>(-) Depositado / Transferido</span><span class="pos">${fmtN(f.depositado)}</span></div>
+      <div class="kv balance"><span>BALANCE (próximo cuadre)</span><span class="${balance<0?'neg':'pos'}">${fmtN(balance)}</span></div>
+    </div>
+  </div>
+</div>
+
+${(d.movimientos||[]).length>0?`
+<div class="section-title" style="margin-top:12px">Movimientos Intra-Semana (Préstamos / Pagos)</div>
+<table>
+  <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th class="r">Monto</th></tr></thead>
+  <tbody>${movRows}</tbody>
+</table>`:''}
+
+${f.notas?`<div style="margin-top:10px;padding:8px;background:#f9f9f9;border:1px solid #ddd;font-size:11px"><b>Notas:</b> ${f.notas}</div>`:''}
+
+<div class="footer">LottoAdmin — Cuadre Semanal | Grupo ${d.grupo?.nombre||''} | ${d.periodo?.descripcion||''}</div>

@@ -1,0 +1,77 @@
+      <div v-if="view==='participacion'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Participación de Beneficios</div>
+            <div class="section-sub">Seguimiento del arrastre de participación por grupo</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-control" style="width:180px" v-model="partFiltro.periodo_id" @change="loadParticipacion">
+              <option value="">— Todos los períodos —</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+            </select>
+            <select class="form-control" style="width:180px" v-model="partFiltro.grupo_id" @change="loadParticipacion">
+              <option value="">— Todos los grupos —</option>
+              <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+            </select>
+            <button class="btn-export excel" @click="exportToExcel('tbl-participacion','participacion')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-participacion','Participación de Beneficios','participacion')">⬇ PDF</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <div class="loading" v-if="loadingPart"><div class="spinner"></div></div>
+            <div class="empty" v-else-if="!participacion.length">
+              <div class="empty-icon">📈</div><p>Sin registros — guarda cuadres primero</p>
+            </div>
+            <table v-else id="tbl-participacion">
+              <thead><tr>
+                <th>Grupo</th><th>Período</th><th>Benef. Semana</th><th>Arrastre Ant.</th>
+                <th>Balance Part.</th><th>%</th><th>A Pagar</th><th>Pagado</th><th>Arrastre Sig.</th>
+              </tr></thead>
+              <tbody>
+                <template v-for="p in participacionAgrupada" :key="p._key||p.id">
+                  <!-- Fila principal: grupo (total) o banca estándar -->
+                  <tr :style="p.esGrupoAgrupado?'background:rgba(255,209,102,0.04)':''">
+                    <td>
+                      <strong>{{ p.grupos?.nombre }}</strong>
+                      <span v-if="p.esGrupoAgrupado" class="tag tag-yellow" style="font-size:9px;margin-left:4px">🏦</span>
+                      <button v-if="p.esGrupoAgrupado && p._bancas.length" class="btn btn-ghost btn-xs"
+                        style="padding:1px 5px;margin-left:4px;font-size:10px"
+                        @click="partExpandido[p._key]=!partExpandido[p._key]">
+                        {{ partExpandido[p._key] ? '▲' : '▼' }}
+                      </button>
+                    </td>
+                    <td>{{ p.periodos?.descripcion || p.periodos?.fecha_inicio }}</td>
+                    <td :class="p.beneficio_semana>=0?'num-pos':'num-neg'">{{ fmt(p.beneficio_semana) }}</td>
+                    <td :class="p.arrastre_anterior>=0?'':'num-neg'">{{ fmt(p.arrastre_anterior) }}</td>
+                    <td :class="p.balance_participacion>=0?'num-pos':'num-neg'">{{ fmt(p.balance_participacion) }}</td>
+                    <td>{{ p.esGrupoAgrupado ? '—' : p.porcentaje+'%' }}</td>
+                    <td :class="p.monto_a_pagar>0?'num-pos':''">{{ fmt(p.monto_a_pagar) }}</td>
+                    <td :class="p.pagado>0?'num-pos':''">{{ fmt(p.pagado) }}</td>
+                    <td :class="p.arrastre_siguiente>=0?'':'num-neg'">{{ fmt(p.arrastre_siguiente) }}</td>
+                  </tr>
+                  <!-- Drilldown: solo bancas que tienen registro de participación -->
+                  <template v-if="p.esGrupoAgrupado && partExpandido[p._key] && p._bancas.length">
+                    <tr v-for="b in p._bancas" :key="b.id"
+                        style="background:rgba(255,209,102,0.07);font-size:12px">
+                      <td style="padding-left:28px;color:var(--muted)">
+                        ↳ <span class="tag tag-yellow" style="font-size:9px">{{ b.bancas?.codigo }}</span>
+                        {{ b.bancas?.nombre }}
+                      </td>
+                      <td>{{ b.periodos?.descripcion || b.periodos?.fecha_inicio }}</td>
+                      <td :class="b.beneficio_semana>=0?'num-pos':'num-neg'">{{ fmt(b.beneficio_semana) }}</td>
+                      <td :class="b.arrastre_anterior>=0?'':'num-neg'">{{ fmt(b.arrastre_anterior) }}</td>
+                      <td :class="b.balance_participacion>=0?'num-pos':'num-neg'">{{ fmt(b.balance_participacion) }}</td>
+                      <td>{{ b.porcentaje }}%</td>
+                      <td :class="b.monto_a_pagar>0?'num-pos':''">{{ fmt(b.monto_a_pagar) }}</td>
+                      <td :class="b.pagado>0?'num-pos':''">{{ fmt(b.pagado) }}</td>
+                      <td :class="b.arrastre_siguiente>=0?'':'num-neg'">{{ fmt(b.arrastre_siguiente) }}</td>
+                    </tr>
+                  </template>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

@@ -1,0 +1,62 @@
+<aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">L</div>
+      <h1>LottoAdmin</h1>
+      <p>Sistema de cuadre</p>
+    </div>
+    <div class="nav-section">Principal</div>
+    <div class="nav-item" :class="{active:view==='dashboard'}" @click="view='dashboard'">
+      <span class="nav-icon">📊</span> Dashboard
+    </div>
+    <div class="nav-item" :class="{active:view==='resumen'}" @click="view='resumen'">
+      <span class="nav-icon">📋</span> Resumen Semanal
+    </div>
+    <div class="nav-section">Operaciones</div>
+    <div class="nav-item" :class="{active:view==='cuadre'}" @click="view='cuadre'">
+      <span class="nav-icon">⚖️</span> Cuadre Semanal
+    </div>
+    <div class="nav-item" :class="{active:view==='importar'}" @click="view='importar'">
+      <span class="nav-icon">📥</span> Importar Ventas
+    </div>
+    <div class="nav-item" :class="{active:view==='gastos'}" @click="view='gastos'">
+      <span class="nav-icon">💸</span> Gastos
+    </div>
+    <div class="nav-item" :class="{active:view==='prestamos'}" @click="view='prestamos'">
+      <span class="nav-icon">💰</span> Préstamos
+    </div>
+    <div class="nav-section">Seguimiento</div>
+    <div class="nav-item" :class="{active:view==='participacion'}" @click="view='participacion'">
+      <span class="nav-icon">📈</span> Participación
+    </div>
+    <div class="nav-item" :class="{active:view==='banco'}" @click="view='banco'">
+      <span class="nav-icon">🏦</span> Cuenta Banco
+    </div>
+    <div class="nav-item" :class="{active:view==='flujo'}" @click="view='flujo'">
+      <span class="nav-icon">💵</span> Flujo de Efectivo
+    </div>
+    <div class="nav-item" :class="{active:view==='estado_resultados'}" @click="view='estado_resultados'">
+      <span class="nav-icon">📑</span> Estado de Resultados
+    </div>
+    <div class="nav-section">Configuración</div>
+    <div class="nav-item" :class="{active:view==='grupos'}" @click="view='grupos'">
+      <span class="nav-icon">👥</span> Grupos
+    </div>
+    <div class="nav-item" :class="{active:view==='bancas'}" @click="view='bancas'">
+      <span class="nav-icon">🏪</span> Bancas
+    </div>
+    <div class="nav-item" :class="{active:view==='periodos'}" @click="view='periodos'">
+      <span class="nav-icon">📅</span> Periodos
+    </div>
+    <div class="nav-item" :class="{active:view==='categorias'}" @click="view='categorias'">
+      <span class="nav-icon">🏷️</span> Categorías
+    </div>
+    <div class="nav-item" :class="{active:view==='config'}" @click="view='config'">
+      <span class="nav-icon">⚙️</span> Configuración
+    </div>
+    <div class="nav-item" :class="{active:view==='docs'}" @click="view='docs'">
+      <span class="nav-icon">📚</span> Guía de Uso
+    </div>
+    <div class="sidebar-bottom">
+      <div class="version">v1.0.0 — LottoAdmin</div>
+    </div>
+  </aside>

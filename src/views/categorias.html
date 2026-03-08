@@ -1,0 +1,116 @@
+      <div v-if="view==='categorias'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">🏷️ Categorías de Movimientos</div>
+            <div class="section-sub">Define los tipos de ingresos y egresos del negocio</div>
+          </div>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-cat-ing','categorias_ingreso');exportToExcel('tbl-cat-egr','categorias_egreso')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-cat-egr','Categorías','categorias')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="editarCategoria({tipo:'egreso',activo:true,orden:0})">+ Nueva Categoría</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <!-- INGRESOS -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title" style="color:var(--accent)">📈 Categorías de Ingreso</div>
+              <span class="tag tag-green">{{ categorias.filter(c=>c.tipo==='ingreso').length }}</span>
+            </div>
+            <div class="card-body" style="padding:0">
+              <table id="tbl-cat-ing"><thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
+                <tbody>
+                  <tr v-for="c in categorias.filter(c=>c.tipo==='ingreso').sort((a,b)=>a.orden-b.orden)" :key="c.id">
+                    <td>
+                      <span :style="'display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c.color+';margin-right:6px'"></span>
+                      {{ c.nombre }}
+                      <span v-if="!c.activo" class="tag tag-gray" style="font-size:9px;margin-left:4px">Inactivo</span>
+                    </td>
+                    <td style="color:var(--muted)">{{ c.descripcion }}</td>
+                    <td style="text-align:right;white-space:nowrap">
+                      <button class="btn btn-ghost btn-xs" @click="editarCategoria(c)">Editar</button>
+                      <button class="btn btn-danger btn-xs" @click="deleteCategoria(c.id)" style="margin-left:4px">✕</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <!-- EGRESOS -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title" style="color:var(--red)">📉 Categorías de Egreso</div>
+              <span class="tag tag-red">{{ categorias.filter(c=>c.tipo==='egreso').length }}</span>
+            </div>
+            <div class="card-body" style="padding:0">
+              <table id="tbl-cat-egr"><thead><tr><th>Nombre</th><th>Descripción</th><th></th></tr></thead>
+                <tbody>
+                  <tr v-for="c in categorias.filter(c=>c.tipo==='egreso').sort((a,b)=>a.orden-b.orden)" :key="c.id">
+                    <td>
+                      <span :style="'display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c.color+';margin-right:6px'"></span>
+                      {{ c.nombre }}
+                      <span v-if="!c.activo" class="tag tag-gray" style="font-size:9px;margin-left:4px">Inactivo</span>
+                    </td>
+                    <td style="color:var(--muted)">{{ c.descripcion }}</td>
+                    <td style="text-align:right;white-space:nowrap">
+                      <button class="btn btn-ghost btn-xs" @click="editarCategoria(c)">Editar</button>
+                      <button class="btn btn-danger btn-xs" @click="deleteCategoria(c.id)" style="margin-left:4px">✕</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <!-- Modal -->
+        <div class="overlay" v-if="showCategoriaModal" @click.self="showCategoriaModal=false">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">{{ editCategoria.id ? 'Editar' : 'Nueva' }} Categoría</div>
+              <button class="close-btn" @click="showCategoriaModal=false">✕</button>
+            </div>
+            <div class="modal-body">
+              <div class="form-grid">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-control" v-model="editCategoria.tipo">
+                      <option value="ingreso">📈 Ingreso</option>
+                      <option value="egreso">📉 Egreso</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Orden</label>
+                    <input type="number" class="form-control" v-model.number="editCategoria.orden" placeholder="0">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Nombre</label>
+                  <input type="text" class="form-control" v-model="editCategoria.nombre" placeholder="Ej: Internet / Conectividad">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Descripción</label>
+                  <input type="text" class="form-control" v-model="editCategoria.descripcion" placeholder="Descripción opcional">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Color indicador</label>
+                    <input type="color" class="form-control" v-model="editCategoria.color" style="height:40px;padding:4px">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Activo</label>
+                    <select class="form-control" v-model="editCategoria.activo">
+                      <option :value="true">Sí</option>
+                      <option :value="false">No</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-ghost" @click="showCategoriaModal=false">Cancelar</button>
+              <button class="btn btn-primary" @click="saveCategoria">Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>

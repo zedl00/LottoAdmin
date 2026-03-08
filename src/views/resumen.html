@@ -1,0 +1,134 @@
+      <div v-if="view==='resumen'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Resumen Semanal</div>
+            <div class="section-sub">Estado de todos los grupos en el período</div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <select class="form-control" style="width:200px" v-model="selectedPeriodoId" @change="loadResumen">
+              <option v-for="p in periodos" :key="p.id" :value="p.id">
+                {{ p.descripcion || p.fecha_inicio }}
+              </option>
+            </select>
+            <div class="export-group">
+              <button class="btn btn-ghost btn-sm" @click="printResumen">🖨 Imprimir</button>
+              <button class="btn-export excel" @click="exportToExcel('tbl-resumen','resumen_semanal')">⬇ Excel</button>
+              <button class="btn-export pdf"   @click="exportToPDF('tbl-resumen','Resumen Semanal','resumen_semanal')">⬇ PDF</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <div class="loading" v-if="loadingResumen"><div class="spinner"></div></div>
+            <div class="empty" v-else-if="!resumenData.length">
+              <div class="empty-icon">📋</div>
+              <p>Sin datos — Ejecuta el cuadre primero</p>
+            </div>
+            <div class="table-wrap" v-else>
+              <table id="tbl-resumen">
+                <thead>
+                  <tr>
+                    <th>#</th><th>Grupo</th><th>Estado</th>
+                    <th title="Ventas − Premios − Comisiones">Res. Lotería</th><th title="Solo gastos tipo Operativo">Gastos Op.</th><th title="Participación del supervisor">Participación</th><th title="Res. Lotería − Gastos − Participación">Res. Período</th>
+                    <th>Pend. Anterior</th><th>Acumulado</th>
+                    <th>Salidas</th><th>Entradas</th>
+                    <th>T. Cierre</th><th>Depositado</th>
+                    <th>Balance</th><th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template v-for="(r,i) in resumenData" :key="r.grupo_id||r.id">
+                  <tr :style="r.modo==='individual_bancas'?'background:rgba(255,209,102,0.04)':''">
+                    <td>{{ i+1 }}</td>
+                    <td>
+                      <strong>{{ r.grupos?.nombre }}</strong>
+                      <span v-if="r.modo==='individual_bancas'" class="tag tag-yellow" style="font-size:9px;margin-left:4px">🏦</span>
+                      <button v-if="r.modo==='individual_bancas'" class="btn btn-ghost btn-xs" style="padding:1px 6px;margin-left:4px;font-size:11px" @click="toggleResumenDrilldown(r.grupo_id)">
+                        {{ resumenExpandido[r.grupo_id] ? '▲' : '▼' }}
+                      </button>
+                    </td>
+                    <td>
+                      <span :class="r.cuadre_guardado ? 'tag tag-green' : 'tag tag-gray'">
+                        {{ r.cuadre_guardado ? '✓ Cuadrado' : '⏳ Pendiente' }}
+                      </span>
+                    </td>
+                    <td :class="r.resultado_loteria>=0?'num-pos':'num-neg'">{{ fmt(r.resultado_loteria) }}</td>
+                    <td class="num-neg">{{ fmt(r.total_gastos) }}</td>
+                    <td :class="r.participacion_op>0?'num-neg':''">{{ r.participacion_op > 0 ? fmt(r.participacion_op) : '—' }}</td>
+                    <td :class="(r.resultado_loteria-r.total_gastos-r.participacion_op)>=0?'num-pos':'num-neg'">
+                      {{ fmt(r.resultado_loteria - r.total_gastos - (r.participacion_op||0)) }}
+                    </td>
+                    <td :class="r.balance_pendiente_anterior>=0?'':'num-neg'">{{ fmt(r.balance_pendiente_anterior) }}</td>
+                    <td :class="r.total_acumulado>=0?'':'num-neg'">{{ fmt(r.total_acumulado) }}</td>
+                    <td class="num-neg">{{ fmt(r.entregado_supervisor) }}</td>
+                    <td class="num-pos">{{ fmt(r.entregado_central) }}</td>
+                    <td>{{ fmt(r.total_a_depositar) }}</td>
+                    <td class="num-pos">{{ fmt(r.depositado) }}</td>
+                    <td :class="r.balance_final>=0?'num-pos':'num-neg'">
+                      <strong>{{ fmt(r.balance_final) }}</strong>
+                    </td>
+                    <td>
+                      <button v-if="r.modo!=='individual_bancas'" class="btn btn-ghost btn-xs" @click="irACuadre(r)">
+                        {{ r.cuadre_guardado ? '✏️ Editar' : '⚖️ Cuadrar' }}
+                      </button>
+                      <button v-else class="btn btn-ghost btn-xs" @click="toggleResumenDrilldown(r.grupo_id)">
+                        Ver Bancas
+                      </button>
+                    </td>
+                  </tr>
+                  <!-- DRILLDOWN: bancas individuales del grupo -->
+                  <template v-if="r.modo==='individual_bancas' && resumenExpandido[r.grupo_id]">
+                    <tr v-if="!(r.cuadres_bancas||[]).length">
+                      <td colspan="14" style="text-align:center;color:var(--muted);font-size:12px;padding:8px 16px;background:rgba(255,209,102,0.04)">
+                        ℹ️ Sin cuadres registrados para las bancas de este grupo en este período
+                      </td>
+                    </tr>
+                    <tr v-for="cb in (r.cuadres_bancas||[])" :key="cb.id"
+                        style="background:rgba(255,209,102,0.06);font-size:12px">
+                      <td style="padding-left:28px;color:var(--muted)">↳</td>
+                      <td style="color:var(--muted)">
+                        <span style="font-size:10px">{{ cb.bancas?.codigo }}</span>
+                        {{ cb.bancas?.nombre }}
+                      </td>
+                      <td><span class="tag tag-green" style="font-size:9px">✓</span></td>
+                      <td :class="cb.resultado_periodo>=0?'num-pos':'num-neg'">{{ fmt(cb.resultado_periodo) }}</td>
+                      <td class="num-neg">{{ fmt(cb.total_gastos||0) }}</td>
+                      <td style="color:var(--muted)">—</td>
+                      <td :class="(cb.resultado_periodo-(cb.total_gastos||0))>=0?'num-pos':'num-neg'">{{ fmt(cb.resultado_periodo-(cb.total_gastos||0)) }}</td>
+                      <td :class="cb.balance_pendiente_anterior<0?'num-neg':''">{{ fmt(cb.balance_pendiente_anterior||0) }}</td>
+                      <td>{{ fmt(cb.total_acumulado||0) }}</td>
+                      <td class="num-neg">{{ fmt(cb.entregado_supervisor||0) }}</td>
+                      <td class="num-pos">{{ fmt(cb.entregado_central||0) }}</td>
+                      <td>{{ fmt(cb.total_a_depositar||0) }}</td>
+                      <td class="num-pos">{{ fmt(cb.depositado||0) }}</td>
+                      <td :class="cb.balance_final>=0?'num-pos':'num-neg'"><strong>{{ fmt(cb.balance_final||0) }}</strong></td>
+                      <td>
+                        <button class="btn btn-ghost btn-xs" @click="irACuadreBanca(r.grupo_id, cb.banca_id)">✏️</button>
+                      </td>
+                    </tr>
+                  </template>
+                  </template>
+                </tbody>
+                <tfoot>
+                  <tr class="summary-row">
+                    <td colspan="3"><strong>TOTALES</strong></td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.resultado_loteria,0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.total_gastos,0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+(r.participacion_op||0),0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+(r.resultado_loteria-r.total_gastos-(r.participacion_op||0)),0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.balance_pendiente_anterior,0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.total_acumulado,0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.entregado_supervisor,0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.entregado_central,0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.total_a_depositar,0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.depositado,0)) }}</td>
+                    <td>{{ fmt(resumenData.reduce((s,r)=>s+r.balance_final,0)) }}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>

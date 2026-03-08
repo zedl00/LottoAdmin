@@ -1,0 +1,41 @@
+      <div v-if="view==='grupos'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Grupos / Supervisores</div>
+            <div class="section-sub">Administración de grupos de ventas</div>
+          </div>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-grupos','grupos')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-grupos','Grupos / Supervisores','grupos')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="showGrupoModal=true;editGrupo={}">+ Nuevo Grupo</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <div class="loading" v-if="loadingGrupos"><div class="spinner"></div></div>
+            <div class="empty" v-else-if="!grupos.length">
+              <div class="empty-icon">👥</div><p>Sin grupos registrados</p>
+            </div>
+            <table v-else id="tbl-grupos">
+              <thead><tr><th>#</th><th>Código</th><th>Nombre</th><th>% Participación</th><th>Bancas</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <tbody>
+                <tr v-for="(g,i) in grupos" :key="g.id">
+                  <td>{{ i+1 }}</td>
+                  <td><strong>{{ g.codigo }}</strong></td>
+                  <td>{{ g.nombre }}</td>
+                  <td>
+                    <span v-if="g.modo==='individual_bancas'" class="tag tag-yellow" style="font-size:9px">🏦 Individual</span>
+                    <span v-else class="tag tag-blue">{{ g.porcentaje_participacion }}%</span>
+                  </td>
+                  <td><span class="counter-badge">{{ bancas.filter(b=>b.grupo_id===g.id).length }}</span></td>
+                  <td><span :class="g.activo?'tag tag-green':'tag tag-gray'">{{ g.activo?'Activo':'Inactivo' }}</span></td>
+                  <td style="display:flex;gap:6px">
+                    <button class="btn btn-ghost btn-xs" @click="editarGrupo(g)">✏️</button>
+                    <button class="btn btn-danger btn-xs" @click="deleteGrupo(g.id)">✕</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

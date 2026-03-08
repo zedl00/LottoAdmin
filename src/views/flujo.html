@@ -1,0 +1,250 @@
+      <div v-if="view==='flujo'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">💵 Flujo de Efectivo Real</div>
+            <div class="section-sub">Dinero real que entra y sale — seguimiento semanal y mensual del dueño</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <select class="form-control" style="width:180px" v-model="flujoFiltro.periodo_id" @change="loadFlujo">
+              <option value="">— Todos los períodos —</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+            </select>
+            <select class="form-control" style="width:130px" v-model="flujoFiltro.mes">
+              <option value="">— Todos los meses —</option>
+              <option v-for="m in flujoMeses" :key="m.value" :value="m.value">{{ m.label }}</option>
+            </select>
+            <select class="form-control" style="width:110px" v-model="flujoFiltro.tipo">
+              <option value="">Todos</option>
+              <option value="ingreso">📈 Ingresos</option>
+              <option value="egreso">📉 Egresos</option>
+            </select>
+            <button class="btn btn-primary" @click="showFlujoModal=true">+ Registrar</button>
+            <button class="btn btn-ghost" @click="loadFlujo">↺</button>
+            <button class="btn-export excel" @click="exportToExcel('tbl-flujo','flujo_efectivo')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-flujo','Flujo de Efectivo Real','flujo_efectivo')">⬇ PDF</button>
+          </div>
+        </div>
+
+        <!-- Explicación del flujo -->
+        <div class="alert alert-info" style="margin-bottom:16px;font-size:12px;line-height:1.6">
+          <strong>💵 ¿Qué es el Flujo de Efectivo Real?</strong><br>
+          Es el registro del dinero real que <strong>sale e ingresa al negocio del dueño</strong> — no el P&L contable, sino el efectivo físico.<br>
+          • Se auto-registra cuando guardas un cuadre con depósito (ingreso) o con avances/préstamos (egreso).<br>
+          • Puedes registrar movimientos manuales adicionales (gastos directos, ingresos externos, etc.).<br>
+          • Úsalo para saber exactamente cuánto efectivo tienes disponible semana a semana.
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="metrics-grid" style="margin-bottom:20px">
+          <div class="metric-card green">
+            <div class="metric-label">Ingresos del Período</div>
+            <div class="metric-value pos">{{ fmt(flujoStats.ingresos) }}</div>
+            <div class="metric-sub">💰 Efectivo recibido</div>
+            <span class="metric-icon">📈</span>
+          </div>
+          <div class="metric-card red">
+            <div class="metric-label">Egresos del Período</div>
+            <div class="metric-value neg">{{ fmt(flujoStats.egresos) }}</div>
+            <div class="metric-sub">💸 Efectivo pagado</div>
+            <span class="metric-icon">📉</span>
+          </div>
+          <div class="metric-card" :class="flujoStats.neto>=0?'green':'red'">
+            <div class="metric-label">Flujo Neto</div>
+            <div class="metric-value" :class="flujoStats.neto>=0?'pos':'neg'">{{ fmt(flujoStats.neto) }}</div>
+            <div class="metric-sub">Balance del período</div>
+            <span class="metric-icon">⚖️</span>
+          </div>
+          <div class="metric-card blue">
+            <div class="metric-label">Saldo Acumulado</div>
+            <div class="metric-value">{{ fmt(flujoStats.saldo) }}</div>
+            <div class="metric-sub">Total acumulado en caja</div>
+            <span class="metric-icon">🏦</span>
+          </div>
+        </div>
+
+        <!-- Gráfico de barras semanales -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header">
+            <div class="card-title">📊 Ingresos vs Egresos por Semana</div>
+            <select class="form-control" style="width:150px" v-model="flujoFiltro.mes" @change="loadFlujo">
+              <option value="">Todos los meses</option>
+              <option v-for="m in flujoMeses" :key="m.value" :value="m.value">{{ m.label }}</option>
+            </select>
+          </div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chartFlujo"></canvas></div></div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Tabla de movimientos -->
+          <div class="card" style="grid-column:1/-1">
+            <div class="card-header">
+              <div class="card-title">Registro de Movimientos</div>
+              <div style="font-size:11px;color:var(--muted)">{{ flujoMovs.length }} registros</div>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="table-wrap">
+                <table id="tbl-flujo">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Grupo</th>
+                      <th style="text-align:right">Ingreso</th><th style="text-align:right">Egreso</th>
+                      <th style="text-align:right">Saldo</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="loadingFlujo"><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Cargando...</td></tr>
+                    <tr v-else-if="!flujoMovs.length"><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Sin movimientos</td></tr>
+                    <tr v-for="m in flujoMovs" :key="m.id">
+                      <td>{{ m.fecha }}</td>
+                      <td>{{ m.concepto }}</td>
+                      <td>
+                        <span class="tag" :style="'background:rgba('+hexToRgb(m.categorias?.color||'#5a6a80')+',0.15);color:'+(m.categorias?.color||'#5a6a80')+';border:1px solid rgba('+hexToRgb(m.categorias?.color||'#5a6a80')+',0.3)'">
+                          {{ m.categorias?.nombre || '—' }}
+                        </span>
+                      </td>
+                      <td>
+                        {{ m.grupos?.nombre || '—' }}
+                        <span v-if="m.bancas" style="display:block;font-size:10px;color:var(--yellow)">
+                          🏦 {{ m.bancas?.codigo }} {{ m.bancas?.nombre }}
+                        </span>
+                      </td>
+                      <td style="text-align:right" :class="m.tipo==='ingreso'?'num-pos':''">
+                        {{ m.tipo==='ingreso' ? fmt(m.monto) : '' }}
+                      </td>
+                      <td style="text-align:right" :class="m.tipo==='egreso'?'num-neg':''">
+                        {{ m.tipo==='egreso' ? fmt(m.monto) : '' }}
+                      </td>
+                      <td style="text-align:right" :class="m.saldo_acumulado>=0?'num-pos':'num-neg'">{{ fmt(m.saldo_acumulado) }}</td>
+                      <td style="white-space:nowrap">
+                        <button class="btn btn-ghost btn-xs" @click="editarFlujo(m)" style="margin-right:4px">✏️</button>
+                        <button class="btn btn-danger btn-xs" @click="deleteFlujo(m.id)">✕</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot v-if="flujoMovs.length">
+                    <tr class="summary-row">
+                      <td colspan="4"><strong>TOTAL</strong></td>
+                      <td style="text-align:right" class="num-pos"><strong>{{ fmt(flujoStats.ingresos) }}</strong></td>
+                      <td style="text-align:right" class="num-neg"><strong>{{ fmt(flujoStats.egresos) }}</strong></td>
+                      <td style="text-align:right" :class="flujoStats.neto>=0?'num-pos':'num-neg'"><strong>{{ fmt(flujoStats.neto) }}</strong></td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Por Categoría -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">📊 Por Categoría de Ingreso</div></div>
+            <div class="card-body" style="padding:0">
+              <table><thead><tr><th>Categoría</th><th style="text-align:right">Total</th><th style="text-align:right">%</th></tr></thead>
+                <tbody>
+                  <tr v-for="c in flujoXCategoria.filter(x=>x.tipo==='ingreso')" :key="c.id">
+                    <td>
+                      <span :style="'display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c.color+';margin-right:6px'"></span>
+                      {{ c.nombre }}
+                    </td>
+                    <td style="text-align:right" class="num-pos">{{ fmt(c.total) }}</td>
+                    <td style="text-align:right;color:var(--muted)">{{ c.pct }}%</td>
+                  </tr>
+                  <tr v-if="!flujoXCategoria.filter(x=>x.tipo==='ingreso').length"><td colspan="3" style="color:var(--muted);text-align:center;padding:12px">Sin datos</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">📊 Por Categoría de Egreso</div></div>
+            <div class="card-body" style="padding:0">
+              <table><thead><tr><th>Categoría</th><th style="text-align:right">Total</th><th style="text-align:right">%</th></tr></thead>
+                <tbody>
+                  <tr v-for="c in flujoXCategoria.filter(x=>x.tipo==='egreso')" :key="c.id">
+                    <td>
+                      <span :style="'display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c.color+';margin-right:6px'"></span>
+                      {{ c.nombre }}
+                    </td>
+                    <td style="text-align:right" class="num-neg">{{ fmt(c.total) }}</td>
+                    <td style="text-align:right;color:var(--muted)">{{ c.pct }}%</td>
+                  </tr>
+                  <tr v-if="!flujoXCategoria.filter(x=>x.tipo==='egreso').length"><td colspan="3" style="color:var(--muted);text-align:center;padding:12px">Sin datos</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal flujo -->
+        <div class="overlay" v-if="showFlujoModal" @click.self="showFlujoModal=false">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">{{ flujoEditId ? "✏️ Editar Movimiento" : "💵 Registrar Movimiento de Efectivo" }}</div>
+              <button class="close-btn" @click="showFlujoModal=false">✕</button>
+            </div>
+            <div class="modal-body">
+              <div class="form-grid">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Fecha</label>
+                    <input type="date" class="form-control" v-model="flujoFrm.fecha">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-control" v-model="flujoFrm.tipo">
+                      <option value="ingreso">📈 Ingreso</option>
+                      <option value="egreso">📉 Egreso</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Categoría <span style="color:var(--accent)">(filtrada por tipo)</span></label>
+                  <select class="form-control" v-model="flujoFrm.categoria_id">
+                    <option value="">— Seleccionar —</option>
+                    <option v-for="c in categorias.filter(c=>c.tipo===flujoFrm.tipo&&c.activo)" :key="c.id" :value="c.id">
+                      {{ c.nombre }}
+                    </option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Concepto</label>
+                  <input type="text" class="form-control" v-model="flujoFrm.concepto" placeholder="Descripción del movimiento">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Monto</label>
+                    <input type="number" class="form-control" v-model.number="flujoFrm.monto" placeholder="0">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Grupo (opcional)</label>
+                    <select class="form-control" v-model="flujoFrm.grupo_id">
+                      <option value="">— Ninguno —</option>
+                      <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Período (opcional)</label>
+                    <select class="form-control" v-model="flujoFrm.periodo_id">
+                      <option value="">— Ninguno —</option>
+                      <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Referencia</label>
+                    <input type="text" class="form-control" v-model="flujoFrm.referencia" placeholder="Nro. transacción...">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Notas</label>
+                  <input type="text" class="form-control" v-model="flujoFrm.notas" placeholder="Observaciones...">
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-ghost" @click="showFlujoModal=false;flujoEditId=null">Cancelar</button>
+              <button class="btn btn-primary" @click="saveFlujo">{{ flujoEditId ? 'Actualizar' : 'Guardar' }}</button>
+            </div>
+          </div>
+        </div>
+      </div>

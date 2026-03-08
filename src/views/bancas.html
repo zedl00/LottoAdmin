@@ -1,0 +1,42 @@
+      <div v-if="view==='bancas'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Bancas / Vendedores</div>
+            <div class="section-sub">Registro de agencias y verifones</div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <select class="form-control" style="width:180px" v-model="bancaFiltroGrupo">
+              <option value="">Todos los grupos</option>
+              <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+            </select>
+            <button class="btn-export excel" @click="exportToExcel('tbl-bancas','bancas')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-bancas','Bancas / Vendedores','bancas')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="showBancaModal=true;editBanca={}">+ Nueva Banca</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <div class="loading" v-if="loadingBancas"><div class="spinner"></div></div>
+            <div class="empty" v-else-if="!bancasFiltradas.length">
+              <div class="empty-icon">🏪</div><p>Sin bancas registradas</p>
+            </div>
+            <table v-else id="tbl-bancas">
+              <thead><tr><th>Código</th><th>Nombre</th><th>Agencia</th><th>Grupo</th><th>% Comisión</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <tbody>
+                <tr v-for="b in bancasFiltradas" :key="b.id">
+                  <td><strong>{{ b.codigo }}</strong></td>
+                  <td>{{ b.nombre }}</td>
+                  <td>{{ b.agencia || '-' }}</td>
+                  <td>{{ grupos.find(g=>g.id===b.grupo_id)?.nombre || '-' }}</td>
+                  <td><span class="tag tag-yellow">{{ b.porcentaje_comision }}%</span></td>
+                  <td><span :class="b.activo?'tag tag-green':'tag tag-gray'">{{ b.activo?'Activo':'Inactivo' }}</span></td>
+                  <td style="display:flex;gap:6px">
+                    <button class="btn btn-ghost btn-xs" @click="editarBanca(b)">✏️</button>
+                    <button class="btn btn-danger btn-xs" @click="deleteBanca(b.id)">✕</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

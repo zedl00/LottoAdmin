@@ -1,0 +1,36 @@
+      <div v-if="view==='periodos'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Períodos Semanales</div>
+            <div class="section-sub">Gestión de semanas de cuadre</div>
+          </div>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-periodos','periodos')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-periodos','Períodos Semanales','periodos')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="showPeriodoModal=true;editPeriodo={}">+ Nuevo Período</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <div class="loading" v-if="loadingPeriodos"><div class="spinner"></div></div>
+            <div class="empty" v-else-if="!periodos.length">
+              <div class="empty-icon">📅</div><p>Sin períodos registrados</p>
+            </div>
+            <table v-else id="tbl-periodos">
+              <thead><tr><th>Descripción</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th></tr></thead>
+              <tbody>
+                <tr v-for="p in periodos" :key="p.id">
+                  <td><strong>{{ p.descripcion }}</strong></td>
+                  <td>{{ p.fecha_inicio }}</td>
+                  <td>{{ p.fecha_fin }}</td>
+                  <td><span :class="p.cerrado?'tag tag-gray':'tag tag-green'">{{ p.cerrado?'Cerrado':'Activo' }}</span></td>
+                  <td style="display:flex;gap:6px">
+                    <button class="btn btn-ghost btn-xs" @click="editarPeriodo(p)">✏️</button>
+                    <button class="btn btn-danger btn-xs" @click="deletePeriodo(p.id)">✕</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

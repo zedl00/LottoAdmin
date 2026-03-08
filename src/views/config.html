@@ -1,0 +1,30 @@
+      <div v-if="view==='config'">
+        <div class="section-header">
+          <div><div class="section-title">Configuración</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">🔗 Conexión Supabase</div></div>
+          <div class="card-body">
+            <div class="alert alert-info" style="margin-bottom:16px">
+              ℹ️ Obtén tu URL y API Key en <strong>supabase.com</strong> → Tu proyecto → Settings → API
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Supabase URL</label>
+                <input type="text" class="form-control" v-model="config.supabaseUrl" placeholder="https://xxxx.supabase.co">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Supabase API Key (anon public)</label>
+                <input type="text" class="form-control" v-model="config.supabaseKey" placeholder="eyJ...">
+              </div>
+              <button class="btn btn-primary" @click="saveConfig" style="width:fit-content">
+                💾 Guardar y Conectar
+              </button>
+            </div>
+            <div class="divider"></div>
+            <div v-if="supabaseConfigured" class="alert alert-success">
+              ✅ Conectado a Supabase — {{ config.supabaseUrl }}
+            </div>
+          </div>
+        </div>
+      </div>

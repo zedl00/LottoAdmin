@@ -1,0 +1,519 @@
+      <div v-if="view==='cuadre'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Cuadre Semanal</div>
+            <div class="section-sub">Cuadre individual por grupo/supervisor</div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <select class="form-control" style="width:180px" v-model="cuadreGrupoId">
+              <option value="">— Seleccionar Grupo —</option>
+              <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+            </select>
+            <select class="form-control" style="width:180px" v-model="cuadrePeriodoId">
+              <option value="">— Período —</option>
+              <option v-for="p in periodos" :key="p.id" :value="p.id">
+                {{ p.descripcion || p.fecha_inicio }}
+              </option>
+            </select>
+            <!-- Selector de banca para grupos individual_bancas -->
+            <select v-if="grupos.find(g=>g.id===cuadreGrupoId)?.modo==='individual_bancas'"
+                    class="form-control" style="width:200px" v-model="cuadreBancaId">
+              <option value="">— Selecciona Banca —</option>
+              <option v-for="b in bancas.filter(b=>b.grupo_id===cuadreGrupoId)" :key="b.id" :value="b.id">
+                {{ b.codigo }} — {{ b.nombre }}
+              </option>
+            </select>
+            <button class="btn btn-ghost btn-sm" @click="abrirNuevoGasto(cuadreGrupoId, cuadrePeriodoId)" title="Registrar gasto sin salir del cuadre">
+              📋 Registrar Gasto
+            </button>
+            <button class="btn btn-primary" @click="loadCuadre"
+              :disabled="!cuadreGrupoId||!cuadrePeriodoId||(grupos.find(g=>g.id===cuadreGrupoId)?.modo==='individual_bancas'&&!cuadreBancaId)">
+              Cargar Cuadre
+            </button>
+            <span v-if="cuadreData?.editando" class="topbar-period" style="background:rgba(255,209,102,0.15);border-color:rgba(255,209,102,0.4);color:var(--yellow)">
+              ✏️ Editando cuadre guardado
+            </span>
+            <button v-if="cuadreData" class="btn btn-ghost" @click="showReporte=true">
+              🖨 Reporte
+            </button>
+          </div>
+        </div>
+
+        <div v-if="cuadreData" class="grid-2">
+          <!-- BANCAS DEL GRUPO -->
+          <div style="grid-column:1/-1">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Bancas — {{ cuadreData.grupo?.nombre }}</div>
+                <div class="topbar-period">{{ cuadreData.periodo?.descripcion || cuadreData.periodo?.fecha_inicio + ' al ' + cuadreData.periodo?.fecha_fin }}</div>
+                <div v-if="cuadreData.esBancaIndividual" class="topbar-period" style="background:rgba(255,209,102,0.12);border-color:rgba(255,209,102,0.4);color:var(--yellow)">
+                  🏦 {{ cuadreData.banca?.codigo }} — {{ cuadreData.banca?.nombre }}
+                </div>
+              </div>
+              <div class="card-body" style="padding:0">
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Banca</th><th>Agencia</th><th>Ventas</th><th>Premios</th>
+                        <th>Resultado</th><th>%</th><th>Comisión</th><th>Res. Lotería</th>
+                        <th>Gastos Op.</th><th>Total Gastos</th><th>Avance</th><th>Res. Período</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="b in cuadreData.bancas" :key="b.id">
+                        <td><strong>{{ b.codigo }}</strong></td>
+                        <td>{{ b.nombre }}</td>
+                        <td>{{ fmt(b.ventas) }}</td>
+                        <td class="num-neg">{{ fmt(b.premios) }}</td>
+                        <td :class="b.resultado>=0?'num-pos':'num-neg'">{{ fmt(b.resultado) }}</td>
+                        <td>{{ b.porcentaje_comision }}%</td>
+                        <td class="num-neg">{{ fmt(b.comision) }}</td>
+                        <td :class="b.resultado_neto>=0?'num-pos':'num-neg'">{{ fmt(b.resultado_neto) }}</td>
+                        <td class="num-neg">{{ fmt(b.gastos_op) }}</td>
+                        <td class="num-neg">{{ fmt(b.total_gastos) }}</td>
+                        <td :style="b.avance>0?'color:var(--blue);font-weight:500':''">{{ b.avance > 0 ? fmt(b.avance) : '-' }}</td>
+                        <td :class="b.resultado_periodo>=0?'num-pos':'num-neg'">
+                          <strong>{{ fmt(b.resultado_periodo) }}</strong>
+                        </td>
+                      </tr>
+                    </tbody>
+                    <tfoot>
+                      <tr class="summary-row">
+                        <td colspan="2"><strong>TOTAL {{ cuadreData.grupo?.nombre }}</strong></td>
+                        <td>{{ fmt(cuadreData.totals.ventas) }}</td>
+                        <td>{{ fmt(cuadreData.totals.premios) }}</td>
+                        <td>{{ fmt(cuadreData.totals.resultado) }}</td>
+                        <td></td>
+                        <td>{{ fmt(cuadreData.totals.comisiones) }}</td>
+                        <td>{{ fmt(cuadreData.totals.resultado_loteria) }}</td>
+                        <td>{{ fmt(cuadreData.totals.gastos_op) }}</td>
+                        <td>{{ fmt(cuadreData.totals.total_gastos) }}</td>
+                        <td style="color:var(--blue)">{{ fmt(cuadreData.totals.avances) }}</td>
+                        <td>{{ fmt(cuadreData.totals.resultado_periodo) }}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══ GASTOS OPERATIVOS ══ -->
+          <div class="card" v-if="cuadreData.gastosOperativos && cuadreData.gastosOperativos.length"
+               style="border-color:rgba(76,201,240,0.25)">
+            <div class="card-header" style="background:rgba(76,201,240,0.04)">
+              <div>
+                <div class="card-title" style="color:var(--blue)">📋 Gastos Operativos del Período</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:2px">
+                  Solo gastos tipo <strong>Operativo</strong> — se descuentan del resultado del supervisor
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <span style="font-size:12px;font-weight:600;color:var(--red)">
+                  − {{ fmt(cuadreData.totals.gastos_op) }}
+                </span>
+                <button class="btn btn-ghost btn-xs" @click="abrirNuevoGasto(cuadreGrupoId, cuadrePeriodoId)">
+                  + Agregar
+                </button>
+              </div>
+            </div>
+            <div class="card-body" style="padding:0">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Concepto</th>
+                    <th>Categoría</th>
+                    <th>Banca</th>
+                    <th style="text-align:right">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="g in cuadreData.gastosOperativos" :key="g.id">
+                    <td style="color:var(--muted);font-size:11px">{{ g.fecha }}</td>
+                    <td>
+                      <span style="font-size:12px">{{ g.concepto }}</span>
+                    </td>
+                    <td>
+                      <span v-if="g.categorias" class="tag tag-blue" style="font-size:9px">{{ g.categorias?.nombre || '—' }}</span>
+                      <span v-else style="font-size:10px;color:var(--muted)">Sin categoría</span>
+                    </td>
+                    <td>
+                      <span v-if="g._bancaCodigo" class="tag tag-gray" style="font-size:9px">
+                        {{ g._bancaCodigo }} — {{ g._bancaNombre }}
+                      </span>
+                      <span v-else class="tag tag-yellow" style="font-size:9px" title="Gasto a nivel de grupo, no asignado a banca específica">
+                        🏢 Grupo general
+                      </span>
+                    </td>
+                    <td style="text-align:right">
+                      <strong class="num-neg">{{ fmt(g.monto) }}</strong>
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr class="summary-row">
+                    <td colspan="4"><strong>TOTAL GASTOS OPERATIVOS</strong></td>
+                    <td style="text-align:right">
+                      <strong class="num-neg">{{ fmt(cuadreData.totals.gastos_op) }}</strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <!-- Aviso si no hay gastos -->
+          <div v-else-if="cuadreData && (!cuadreData.gastosOperativos || !cuadreData.gastosOperativos.length)"
+               style="background:rgba(255,255,255,0.02);border:1px dashed var(--border2);border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:0">
+            <span style="font-size:11px;color:var(--muted)">
+              📋 Sin gastos operativos registrados para este período
+            </span>
+            <button class="btn btn-ghost btn-xs" @click="abrirNuevoGasto(cuadreGrupoId, cuadrePeriodoId)">
+              + Registrar gasto
+            </button>
+          </div>
+
+          <!-- BALANCES -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">💰 Balances y Movimientos</div></div>
+            <div class="card-body">
+              <div class="cuadre-block">
+                <div class="cuadre-block-title">Resultados Lotería</div>
+                <div class="kv-row"><span class="kv-label">Ventas</span>
+                  <span class="kv-value num-pos">{{ fmt(cuadreData.totals.ventas) }}</span></div>
+                <div class="kv-row"><span class="kv-label">(-) Premios</span>
+                  <span class="kv-value num-neg">{{ fmt(cuadreData.totals.premios) }}</span></div>
+                <div class="kv-row"><span class="kv-label">(-) Comisiones</span>
+                  <span class="kv-value num-neg">{{ fmt(cuadreData.totals.comisiones) }}</span></div>
+                <!-- Subtotal antes de gastos — base de participación -->
+                <div class="kv-row kv-total" style="background:rgba(0,229,160,0.06);margin-bottom:8px">
+                  <span class="kv-label">
+                    <strong>Resultado Lotería</strong>
+                    <span style="display:block;font-size:9px;font-weight:normal;color:var(--muted)">Base para cálculo de participación</span>
+                  </span>
+                  <span :class="['kv-value', cuadreData.totals.resultado_loteria>=0?'num-pos':'num-neg']">
+                    <strong>{{ fmt(cuadreData.totals.resultado_loteria) }}</strong>
+                  </span>
+                </div>
+                <!-- Gastos operativos solo si existen -->
+                <div v-if="cuadreData.totals.total_gastos > 0">
+                  <div class="kv-row"><span class="kv-label" style="color:var(--blue)">(-) Gastos Operativos</span>
+                    <span class="kv-value num-neg">{{ fmt(cuadreData.totals.total_gastos) }}</span></div>
+                  <div class="kv-row kv-total"><span class="kv-label"><strong>Resultado Período</strong></span>
+                    <span :class="['kv-value', cuadreData.totals.resultado_periodo>=0?'num-pos':'num-neg']">
+                      <strong>{{ fmt(cuadreData.totals.resultado_periodo) }}</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Participación — con arrastre, no muestra cálculo si base negativa -->
+              <div class="cuadre-block" :style="calcParticipacion>0 ? 'border-color:rgba(255,209,102,0.35)' : 'border-color:rgba(255,255,255,0.06)'">
+                <div class="cuadre-block-title" style="color:var(--yellow)">Participación del Supervisor</div>
+
+                <!-- Desglose de la base solo si hay arrastre -->
+                <div v-if="cuadreFrm.arrastre_participacion !== 0">
+                  <div class="kv-row">
+                    <span class="kv-label">Resultado Lotería esta semana</span>
+                    <span :class="['kv-value', cuadreData.totals.resultado_loteria>=0?'num-pos':'num-neg']">{{ fmt(cuadreData.totals.resultado_loteria) }}</span>
+                  </div>
+                  <div class="kv-row">
+                    <span class="kv-label">{{ cuadreFrm.arrastre_participacion < 0 ? '(+/−) Arrastre período anterior (déficit)' : '(+) Arrastre período anterior' }}</span>
+                    <span :class="['kv-value', cuadreFrm.arrastre_participacion>=0?'num-pos':'num-neg']">{{ fmt(cuadreFrm.arrastre_participacion) }}</span>
+                  </div>
+                </div>
+                <div v-else class="kv-row">
+                  <span class="kv-label">Resultado Lotería (base participación)</span>
+                  <span :class="['kv-value', cuadreData.totals.resultado_loteria>=0?'num-pos':'num-neg']">{{ fmt(cuadreData.totals.resultado_loteria) }}</span>
+                </div>
+
+                <!-- Base acumulada con arrastre -->
+                <div class="kv-row" style="margin-top:4px">
+                  <span class="kv-label"><strong>Base acumulada</strong></span>
+                  <span :class="['kv-value', calcBaseParticipacion>=0?'num-pos':'num-neg']"><strong>{{ fmt(calcBaseParticipacion) }}</strong></span>
+                </div>
+
+                <!-- SI BASE POSITIVA: mostrar cálculo y resultado -->
+                <template v-if="calcBaseParticipacion > 0">
+                  <div class="kv-row" style="margin-top:2px">
+                    <span class="kv-label">% Participación acordado</span>
+                    <span class="kv-value" style="color:var(--yellow)">{{ cuadreData.grupo?.porcentaje_participacion || 0 }}%</span>
+                  </div>
+                  <div class="kv-row kv-total" style="background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.25);margin-top:6px">
+                    <span class="kv-label">
+                      <strong>Participación a Pagar</strong>
+                      <span style="display:block;font-size:9px;font-weight:normal;color:var(--muted)">Supervisor retiene este monto</span>
+                    </span>
+                    <span class="kv-value" style="color:var(--yellow)"><strong>{{ fmt(calcParticipacion) }}</strong></span>
+                  </div>
+                  <div class="kv-row kv-total" style="margin-top:6px">
+                    <span class="kv-label"><strong>Resultado Neto para Central</strong></span>
+                    <span :class="['kv-value', (cuadreData.totals.resultado_periodo - calcParticipacion)>=0?'num-pos':'num-neg']">
+                      <strong>{{ fmt(cuadreData.totals.resultado_periodo - calcParticipacion) }}</strong>
+                    </span>
+                  </div>
+                </template>
+
+                <!-- SI BASE NEGATIVA/CERO: mensaje claro, sin cálculo -->
+                <div v-else class="alert" style="margin-top:8px;margin-bottom:0;font-size:11px;background:rgba(255,77,109,0.07);border:1px solid rgba(255,77,109,0.2);color:var(--red)">
+                  🔴 Base acumulada negativa — <strong>sin participación esta semana.</strong>
+                  El déficit de <strong>{{ fmt(calcBaseParticipacion) }}</strong> se arrastrará al próximo período.
+                </div>
+              </div>
+
+              <div class="cuadre-block">
+                <div class="cuadre-block-title">Balance Acumulado</div>
+                <div class="kv-row"><span class="kv-label">Balance Anterior</span>
+                  <span class="kv-value">{{ fmt(cuadreFrm.balance_anterior) }}</span></div>
+                <div class="kv-row"><span class="kv-label">Resultado Semana</span>
+                  <span :class="['kv-value', cuadreData.totals.resultado_periodo>=0?'num-pos':'num-neg']">{{ fmt(cuadreData.totals.resultado_periodo) }}</span></div>
+                <div class="kv-row kv-total"><span class="kv-label"><strong>Total Acumulado</strong></span>
+                  <span :class="['kv-value', (cuadreFrm.balance_anterior+cuadreData.totals.resultado_periodo)>=0?'num-pos':'num-neg']"><strong>{{ fmt(cuadreFrm.balance_anterior + cuadreData.totals.resultado_periodo) }}</strong></span></div>
+              </div>
+
+              <!-- ── MOVIMIENTOS DE SEMANA (avances + pagos mid-week) ── -->
+              <div class="cuadre-block" style="border-color:rgba(76,201,240,0.3)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                  <div class="cuadre-block-title" style="color:var(--blue);margin-bottom:0">💱 Movimientos de Semana</div>
+                  <button class="btn btn-ghost btn-xs" @click="abrirMovRapido">+ Agregar</button>
+                </div>
+
+                <!-- Lista de movimientos registrados -->
+                <div v-if="cuadreData.movimientos && cuadreData.movimientos.length > 0">
+                  <table style="width:100%;font-size:11px;border-collapse:collapse;margin-bottom:8px">
+                    <thead><tr style="background:rgba(255,255,255,0.03)">
+                      <th style="padding:4px 8px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px">Fecha</th>
+                      <th style="padding:4px 8px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px">Concepto</th>
+                      <th style="padding:4px 8px;text-align:center;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px">Tipo</th>
+                      <th style="padding:4px 8px;text-align:right;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1px">Monto</th>
+                    </tr></thead>
+                    <tbody>
+                      <tr v-for="m in cuadreData.movimientos" :key="m.id" style="border-bottom:1px solid rgba(255,255,255,0.03)">
+                        <td style="padding:5px 8px;color:var(--muted)">{{ m.fecha }}</td>
+                        <td style="padding:5px 8px">{{ m.concepto || (m.tipo==='salida' ? 'Avance entregado' : 'Pago recibido') }}</td>
+                        <td style="padding:5px 8px;text-align:center">
+                          <span :class="m.tipo==='salida'?'tag tag-red':'tag tag-green'" style="font-size:9px">
+                            {{ m.tipo==='salida' ? '↑ Avance/Préstamo' : '↓ Pago Recibido' }}
+                          </span>
+                        </td>
+                        <td style="padding:5px 8px;text-align:right;font-weight:600"
+                            :style="m.tipo==='salida'?'color:var(--red)':'color:var(--accent)'">
+                          {{ m.tipo==='salida' ? '-' : '+' }}{{ fmt(m.monto) }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <!-- Totales de movimientos -->
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px">
+                    <div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.2);border-radius:6px;padding:8px;text-align:center">
+                      <div style="color:var(--muted);font-size:9px;letter-spacing:1px;margin-bottom:2px">ENTREGADO</div>
+                      <div style="color:var(--red);font-weight:700">{{ fmt(cuadreData.movSalidas) }}</div>
+                    </div>
+                    <div style="background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);border-radius:6px;padding:8px;text-align:center">
+                      <div style="color:var(--muted);font-size:9px;letter-spacing:1px;margin-bottom:2px">RECIBIDO</div>
+                      <div style="color:var(--accent);font-weight:700">{{ fmt(cuadreData.movEntradas) }}</div>
+                    </div>
+                    <div style="background:rgba(76,201,240,0.08);border:1px solid rgba(76,201,240,0.2);border-radius:6px;padding:8px;text-align:center">
+                      <div style="color:var(--muted);font-size:9px;letter-spacing:1px;margin-bottom:2px">NETO</div>
+                      <div :style="cuadreData.movNeto>0?'color:var(--red);font-weight:700':'color:var(--accent);font-weight:700'">
+                        {{ cuadreData.movNeto > 0 ? '-' : '+' }}{{ fmt(Math.abs(cuadreData.movNeto)) }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else style="text-align:center;color:var(--muted);font-size:11px;padding:12px 0">
+                  Sin movimientos registrados esta semana
+                </div>
+
+                <!-- Ajuste manual si hay diferencia -->
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+                  <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">
+                    Valores auto-cargados desde movimientos (ajusta si hay diferencia)
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Total Entregado (salidas)</label>
+                      <input type="number" class="form-control" v-model.number="cuadreFrm.entregado_supervisor" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Total Recibido (entradas)</label>
+                      <input type="number" class="form-control" v-model.number="cuadreFrm.entregado_central" placeholder="0">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ── RESUMEN DE BALANCE (según fórmula) ── -->
+              <div class="cuadre-block" style="background:rgba(0,0,0,0.2)">
+                <div class="cuadre-block-title">Resumen de Posición</div>
+
+                <!-- Bloque 1: P&L -->
+                <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:0 0 4px 0">Resultado del Período</div>
+                <div class="kv-row" style="align-items:center">
+                  <span class="kv-label">Balance Pendiente Período Anterior
+                    <span style="display:block;font-size:9px;font-weight:normal" :style="balanceAnteriorManual?'color:#f0a500':'color:var(--muted)'">
+                      {{ balanceAnteriorManual ? '✏️ Editable — primer cuadre sin historial' : '🔒 Auto-cargado del cuadre anterior' }}
+                    </span>
+                  </span>
+                  <input type="number" style="width:130px;text-align:right;font-weight:600;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px" v-model.number="cuadreFrm.balance_anterior" :disabled="!balanceAnteriorManual" :title="balanceAnteriorManual ? 'Editable: primer cuadre sin historial' : 'Auto-cargado del cuadre anterior'">
+                </div>
+                <div class="kv-row"><span class="kv-label">Resultado Final (P&L semana)</span>
+                  <span :class="['kv-value', cuadreData.totals.resultado_periodo>=0?'num-pos':'num-neg']">{{ fmt(cuadreData.totals.resultado_periodo) }}</span></div>
+                <div class="kv-row kv-total"><span class="kv-label"><strong>Total Acumulado</strong></span>
+                  <span :class="['kv-value', (cuadreFrm.balance_anterior+cuadreData.totals.resultado_periodo)>=0?'num-pos':'num-neg']">
+                    <strong>{{ fmt(cuadreFrm.balance_anterior + cuadreData.totals.resultado_periodo) }}</strong></span></div>
+
+                <!-- Bloque 2: Movimientos -->
+                <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:10px 0 4px 0">Movimientos de Efectivo</div>
+                <div class="kv-row" v-if="cuadreFrm.entregado_supervisor > 0">
+                  <span class="kv-label">(+) Entregado Préstamo (a supervisor)</span>
+                  <span class="kv-value num-neg">{{ fmt(cuadreFrm.entregado_supervisor) }}</span>
+                </div>
+                <div class="kv-row" v-if="cuadreFrm.entregado_central > 0">
+                  <span class="kv-label">(-) Transferencia Admin (de supervisor)</span>
+                  <span class="kv-value num-pos">{{ fmt(cuadreFrm.entregado_central) }}</span>
+                </div>
+                <div class="kv-row kv-total">
+                  <span class="kv-label"><strong>Total a Depositar / Transferir</strong></span>
+                  <span :class="['kv-value', calcTotalDepositar>=0?'num-pos':'num-neg']"><strong>{{ fmt(calcTotalDepositar) }}</strong></span>
+                </div>
+                <div v-if="calcParticipacion > 0" class="kv-row" style="margin-top:4px">
+                  <span class="kv-label" style="color:var(--yellow)">(-) Participación Supervisor ({{ cuadreData.grupo?.porcentaje_participacion }}%)</span>
+                  <span class="kv-value" style="color:var(--yellow)">{{ fmt(calcParticipacion) }}</span>
+                </div>
+                <div class="kv-row kv-total" style="background:rgba(0,229,160,0.12);border:1px solid rgba(0,229,160,0.35);margin-top:6px">
+                  <span class="kv-label">
+                    <strong>💵 MONTO ENTREGADO</strong>
+                    <span style="display:block;font-size:9px;font-weight:normal;color:var(--muted)">+ supervisor deposita | - admin paga al supervisor</span>
+                  </span>
+                  <span :class="['kv-value', calcMontoEntregaSupervisor>=0?'num-pos':'num-neg']"><strong>{{ fmt(calcMontoEntregaSupervisor) }}</strong></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CIERRE -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">🔒 Cierre del Cuadre</div></div>
+            <div class="card-body">
+              <div class="cuadre-block">
+                <div class="cuadre-block-title">Registro de Pago Final</div>
+                <div class="kv-row" style="margin-bottom:8px;background:rgba(0,229,160,0.08);border-radius:4px;padding:8px">
+                  <span class="kv-label">
+                    <strong>MONTO ENTREGADO esperado</strong>
+                    <span style="display:block;font-size:10px;font-weight:normal;color:var(--muted)">
+                      {{ calcMontoEntregaSupervisor >= 0 ? '✅ Supervisor deposita este monto' : '🔴 Central paga este monto al supervisor' }}
+                    </span>
+                  </span>
+                  <span :class="['kv-value', calcMontoEntregaSupervisor>=0?'num-pos':'num-neg']"><strong>{{ fmt(calcMontoEntregaSupervisor) }}</strong></span>
+                </div>
+                <div class="form-group" style="margin-bottom:12px">
+                  <label class="form-label">Monto Real Depositado / Transferido</label>
+                  <input type="number" class="form-control" v-model.number="cuadreFrm.depositado" placeholder="0">
+                </div>
+                <div class="kv-row kv-total" style="border:2px solid var(--accent);background:rgba(0,229,160,0.08)">
+                  <span class="kv-label"><strong>BALANCE (próximo cuadre)</strong>
+                    <span style="display:block;font-size:9px;font-weight:normal;color:var(--muted)">Total a Depositar - Monto Entregado</span>
+                  </span>
+                  <span :class="['kv-value', calcBalanceFinal>=0?'num-pos':'num-neg']">
+                    <strong>{{ fmt(calcBalanceFinal) }}</strong>
+                  </span>
+                </div>
+              </div>
+              <div class="cuadre-block">
+                <div class="cuadre-block-title">Participación de Beneficio</div>
+                <div class="kv-row" style="align-items:center">
+                  <span class="kv-label">Arrastre Anterior Participación
+                    <span style="display:block;font-size:9px;font-weight:normal" :style="arrastrePartManual?'color:#f0a500':'color:var(--muted)'">
+                      {{ arrastrePartManual ? '✏️ Editable — primer cuadre sin historial' : '🔒 Auto-cargado del período anterior' }}
+                    </span>
+                  </span>
+                  <input type="number" style="width:130px;text-align:right;font-weight:600;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px" v-model.number="cuadreFrm.arrastre_participacion" :disabled="!arrastrePartManual" :title="arrastrePartManual ? 'Editable: primer cuadre sin historial' : 'Auto-cargado del período anterior'">
+                </div>
+                <div class="kv-row">
+                  <span class="kv-label">Balance Participación</span>
+                  <span :class="['kv-value', calcBaseParticipacion>=0?'num-pos':'num-neg']">{{ fmt(calcBaseParticipacion) }}</span>
+                </div>
+                <div class="kv-row">
+                  <span class="kv-label">Porcentaje</span>
+                  <span class="kv-value">{{ cuadreData.grupo?.porcentaje_participacion }}%</span>
+                </div>
+                <div class="kv-row kv-total">
+                  <span class="kv-label"><strong>A Pagar Participación</strong></span>
+                  <span :class="['kv-value', calcParticipacion>0?'num-pos':'']">
+                    <strong>{{ fmt(calcParticipacion) }}</strong>
+                  </span>
+                </div>
+                <div v-if="calcParticipacion<=0" class="alert alert-info" style="margin-top:12px;margin-bottom:0">
+                  ℹ️ Arrastre negativo — sin pago esta semana
+                </div>
+                <div v-else style="margin-top:12px">
+                  <div class="form-group">
+                    <label class="form-label">Participación Pagada</label>
+                    <input type="number" class="form-control" v-model.number="cuadreFrm.participacion_pagada" placeholder="0" :max="calcParticipacion">
+                  </div>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:16px">
+                <label class="form-label">Notas del Cuadre</label>
+                <input type="text" class="form-control" v-model="cuadreFrm.notas" placeholder="Observaciones...">
+              </div>
+              <button class="btn btn-primary" style="width:100%" @click="saveCuadre" :disabled="savingCuadre">
+                {{ savingCuadre ? '⏳ Guardando...' : '💾 Guardar Cuadre' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="empty">
+          <div class="empty-icon">⚖️</div>
+          <p>Selecciona un grupo y período para cargar el cuadre</p>
+        </div>
+
+        <!-- Modal: Agregar movimiento rápido desde el cuadre -->
+        <div class="overlay" v-if="showMovRapido" @click.self="showMovRapido=false">
+          <div class="modal" style="max-width:480px">
+            <div class="modal-header">
+              <div class="modal-title">💱 Registrar Movimiento de Semana</div>
+              <button class="close-btn" @click="showMovRapido=false">✕</button>
+            </div>
+            <div class="modal-body">
+              <div class="alert alert-info" style="font-size:11px;margin-bottom:14px">
+                <strong>Avance/Préstamo:</strong> dinero que se le entregó al supervisor cuando una banca perdió.<br>
+                <strong>Pago Recibido:</strong> dinero que el supervisor entregó antes del cuadre porque las bancas generaron ganancias.
+              </div>
+              <div class="form-grid">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Fecha del Movimiento</label>
+                    <input type="date" class="form-control" v-model="movRapidoFrm.fecha">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-control" v-model="movRapidoFrm.tipo" style="font-size:13px">
+                      <option value="salida">↑ Avance / Préstamo (salida)</option>
+                      <option value="entrada">↓ Pago Recibido (entrada)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Monto</label>
+                    <input type="number" class="form-control" v-model.number="movRapidoFrm.monto" placeholder="0" ref="movMontoInput">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Concepto</label>
+                    <input type="text" class="form-control" v-model="movRapidoFrm.concepto" placeholder="Ej: Banca 01 perdió jueves">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-ghost" @click="showMovRapido=false">Cancelar</button>
+              <button class="btn btn-primary" @click="saveMovRapido">💾 Guardar Movimiento</button>
+            </div>
+          </div>
+        </div>
+      </div>

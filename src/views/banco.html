@@ -1,0 +1,91 @@
+      <div v-if="view==='banco'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Cuenta Bancaria</div>
+            <div class="section-sub">Control de movimientos y saldo</div>
+          </div>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-banco','cuenta_bancaria')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-banco','Cuenta Bancaria','cuenta_bancaria')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="showBancoModal=true">+ Registrar Movimiento</button>
+          </div>
+        </div>
+
+        <div class="metrics-grid" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric-card green">
+            <div class="metric-label">Saldo Actual</div>
+            <div :class="['metric-value', bancoStats.saldo>=0?'pos':'neg']">{{ fmt(bancoStats.saldo) }}</div>
+          </div>
+          <div class="metric-card blue">
+            <div class="metric-label">Total Ingresos (mes)</div>
+            <div class="metric-value pos">{{ fmt(bancoStats.ingresos) }}</div>
+          </div>
+          <div class="metric-card red">
+            <div class="metric-label">Total Egresos (mes)</div>
+            <div class="metric-value neg">{{ fmt(bancoStats.egresos) }}</div>
+          </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Desde</label>
+                <input type="date" class="form-control" v-model="bancoFiltro.desde" @change="loadBanco">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Hasta</label>
+                <input type="date" class="form-control" v-model="bancoFiltro.hasta" @change="loadBanco">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Tipo</label>
+                <select class="form-control" v-model="bancoFiltro.tipo" @change="loadBanco">
+                  <option value="">Todos</option>
+                  <option>ingreso</option><option>egreso</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Grupo</label>
+                <select class="form-control" v-model="bancoFiltro.grupo_id" @change="loadBanco">
+                  <option value="">Todos</option>
+                  <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <div class="loading" v-if="loadingBanco"><div class="spinner"></div></div>
+            <div class="empty" v-else-if="!bancoMovs.length">
+              <div class="empty-icon">🏦</div><p>Sin movimientos en el período</p>
+            </div>
+            <table v-else id="tbl-banco">
+              <thead><tr>
+                <th>Fecha</th><th>Concepto</th><th>Grupo</th><th>Categoría</th>
+                <th>Referencia</th><th>Tipo</th><th>Monto</th><th>Saldo</th><th></th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="m in bancoMovs" :key="m.id">
+                  <td>{{ m.fecha }}</td>
+                  <td>{{ m.concepto }}</td>
+                  <td>{{ m.grupos?.nombre || '-' }}</td>
+                  <td><span class="tag tag-gray">{{ m.categorias?.nombre || '-' }}</span></td>
+                  <td>{{ m.referencia || '-' }}</td>
+                  <td><span :class="m.tipo==='ingreso'?'tag tag-green':'tag tag-red'">{{ m.tipo }}</span></td>
+                  <td :class="m.tipo==='ingreso'?'num-pos':'num-neg'">
+                    {{ m.tipo==='ingreso'?'+':'-' }}{{ fmt(m.monto) }}
+                  </td>
+                  <td>{{ fmt(m.saldo_acumulado) }}</td>
+                  <td style="white-space:nowrap">
+                    <button class="btn btn-ghost btn-xs" @click="editarBanco(m)" style="margin-right:4px">✏️</button>
+                    <button class="btn btn-danger btn-xs" @click="deleteBanco(m.id)">✕</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

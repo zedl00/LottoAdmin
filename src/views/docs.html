@@ -1,0 +1,196 @@
+      <div v-if="view==='docs'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">📚 Guía de Uso y Estructura de Datos</div>
+            <div class="section-sub">Explicación de cada tabla y el flujo de información</div>
+          </div>
+        </div>
+
+        <!-- FLUJO GENERAL -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><div class="card-title">🔄 Flujo Semanal de Operación</div></div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;text-align:center">
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+                <div style="font-size:24px;margin-bottom:6px">1️⃣</div>
+                <div style="font-size:11px;font-weight:700;color:var(--accent)">CREAR PERÍODO</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px">Lunes — crear semana lunes a domingo</div>
+              </div>
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+                <div style="font-size:24px;margin-bottom:6px">2️⃣</div>
+                <div style="font-size:11px;font-weight:700;color:var(--blue)">IMPORTAR VENTAS</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px">CSV del sistema o ingreso manual</div>
+              </div>
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+                <div style="font-size:24px;margin-bottom:6px">3️⃣</div>
+                <div style="font-size:11px;font-weight:700;color:var(--yellow)">REGISTRAR GASTOS</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px">Operativos, internet, equipos, etc.</div>
+              </div>
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+                <div style="font-size:24px;margin-bottom:6px">4️⃣</div>
+                <div style="font-size:11px;font-weight:700;color:var(--yellow)">AVANCES MID-WEEK</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px">Vienen del CSV como "Avances" — automático</div>
+              </div>
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+                <div style="font-size:24px;margin-bottom:6px">5️⃣</div>
+                <div style="font-size:11px;font-weight:700;color:var(--accent)">EJECUTAR CUADRE</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px">Por grupo — calcular y guardar</div>
+              </div>
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+                <div style="font-size:24px;margin-bottom:6px">6️⃣</div>
+                <div style="font-size:11px;font-weight:700;color:var(--blue)">RESUMEN + REPORTE</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px">Vista general + PDF/WhatsApp</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FÓRMULA DEL CUADRE -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><div class="card-title">🧮 Fórmula del Cuadre — Paso a Paso</div></div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+              <div>
+                <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">P&L LOTERÍA (por banca)</div>
+                <div class="kv-row"><span class="kv-label">Ventas</span><span class="kv-value num-pos">= datos sistema</span></div>
+                <div class="kv-row"><span class="kv-label">(-) Premios</span><span class="kv-value num-neg">= datos sistema</span></div>
+                <div class="kv-row"><span class="kv-label">= Resultado Bruto</span><span class="kv-value">Ventas - Premios</span></div>
+                <div class="kv-row"><span class="kv-label">(-) Comisión vendedor</span><span class="kv-value num-neg">Ventas × % comisión</span></div>
+                <div class="kv-row"><span class="kv-label">= Resultado Lotería</span><span class="kv-value">Resultado - Comisión</span></div>
+                <div class="kv-row"><span class="kv-label">(-) Gastos Operativos</span><span class="kv-value num-neg">registros en Gastos</span></div>
+                <div class="kv-row" style="background:rgba(0,229,160,0.05);padding:6px"><span class="kv-label"><strong>= Resultado Período</strong></span><span class="kv-value num-pos"><strong>Total del grupo</strong></span></div>
+              </div>
+              <div>
+                <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">BALANCE DE EFECTIVO</div>
+                <div class="kv-row"><span class="kv-label">Balance Anterior</span><span class="kv-value">del cuadre previo</span></div>
+                <div class="kv-row"><span class="kv-label">(+) Resultado Período</span><span class="kv-value">calculado arriba</span></div>
+                <div class="kv-row"><span class="kv-label">= Total Acumulado</span><span class="kv-value">suma de ambos</span></div>
+                <div class="kv-row"><span class="kv-label">(+) Avances entregados</span><span class="kv-value" style="color:var(--blue)">del CSV (préstamos)</span></div>
+                <div class="kv-row"><span class="kv-label">(+) Otros préstamos</span><span class="kv-value">entrada manual</span></div>
+                <div class="kv-row"><span class="kv-label">(-) Pagos ya recibidos</span><span class="kv-value">antes del cuadre</span></div>
+                <div class="kv-row"><span class="kv-label">= Total a Depositar</span><span class="kv-value">lo que deben</span></div>
+                <div class="kv-row"><span class="kv-label">(-) Gasto Participación</span><span class="kv-value" style="color:var(--yellow)">retiene supervisor</span></div>
+                <div class="kv-row" style="background:rgba(0,229,160,0.05);padding:6px"><span class="kv-label"><strong>= Entrega al Central</strong></span><span class="kv-value num-pos"><strong>lo que depositan</strong></span></div>
+                <div class="kv-row"><span class="kv-label">(-) Depositado real</span><span class="kv-value">lo que entregaron</span></div>
+                <div class="kv-row" style="background:rgba(255,77,109,0.05);padding:6px"><span class="kv-label"><strong>= Balance Final</strong></span><span class="kv-value num-neg"><strong>→ próximo cuadre</strong></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLAS -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-header"><div class="card-title">📋 grupos</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">Supervisores o grupos de ventas. Cada grupo agrupa varias bancas.</p>
+              <div class="kv-row"><span class="kv-label">nombre, codigo</span><span class="kv-value">identificación</span></div>
+              <div class="kv-row"><span class="kv-label">porcentaje_participacion</span><span class="kv-value" style="color:var(--yellow)">% de ganancias que retiene el supervisor</span></div>
+              <div class="kv-row"><span class="kv-label">activo</span><span class="kv-value">si aparece en cuadres</span></div>
+              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                📝 <strong>Qué registrar primero:</strong> Crea todos los grupos/supervisores antes de crear bancas.
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">🏪 bancas</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">Vendedores, agencias o verifones. Pertenecen a un grupo.</p>
+              <div class="kv-row"><span class="kv-label">codigo, nombre, agencia</span><span class="kv-value">identificación</span></div>
+              <div class="kv-row"><span class="kv-label">usuario_sistema</span><span class="kv-value" style="color:var(--accent)">⚠️ CLAVE para mapeo CSV</span></div>
+              <div class="kv-row"><span class="kv-label">porcentaje_comision</span><span class="kv-value">% sobre ventas que gana el vendedor</span></div>
+              <div class="kv-row"><span class="kv-label">grupo_id</span><span class="kv-value">a qué grupo pertenece</span></div>
+              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                📝 <strong>Importante:</strong> El campo <code>usuario_sistema</code> debe coincidir con la columna <code>Usuario</code> del CSV exportado.
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">📅 periodos</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">Una semana de cuadre (lunes a domingo). Todo se filtra por período.</p>
+              <div class="kv-row"><span class="kv-label">fecha_inicio, fecha_fin</span><span class="kv-value">rango de la semana</span></div>
+              <div class="kv-row"><span class="kv-label">descripcion</span><span class="kv-value">ej: "Semana 16 al 22 Febrero"</span></div>
+              <div class="kv-row"><span class="kv-label">cerrado</span><span class="kv-value">marca semana como finalizada</span></div>
+              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                📝 <strong>Cuándo crear:</strong> Cada lunes, crea el nuevo período antes de importar ventas.
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">💰 ventas_semana</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">Datos del sistema de gestión: ventas, premios y avances por banca/semana.</p>
+              <div class="kv-row"><span class="kv-label">ventas, premios</span><span class="kv-value">datos del sistema de lotería</span></div>
+              <div class="kv-row"><span class="kv-label" style="color:var(--blue)">avances</span><span class="kv-value" style="color:var(--blue)">préstamos entregados mid-week (se recuperan en cuadre)</span></div>
+              <div class="kv-row"><span class="kv-label">recargas, servicios</span><span class="kv-value">otros ingresos del sistema</span></div>
+              <div class="alert alert-success" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                📥 <strong>Cómo se llena:</strong> Via importación CSV o ingreso manual. Una vez cargado, el Dashboard y Resumen se actualizan en tiempo real.
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">💸 gastos</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">Gastos operativos por banca o grupo. Se descuentan del resultado.</p>
+              <div class="kv-row"><span class="kv-label">operativo</span><span class="kv-value">internet, materiales, etc.</span></div>
+              <div class="kv-row"><span class="kv-label">central</span><span class="kv-value">gastos que paga la central</span></div>
+              <div class="kv-row"><span class="kv-label" style="color:var(--yellow)">participacion</span><span class="kv-value" style="color:var(--yellow)">se crea automáticamente al guardar cuadre</span></div>
+              <div class="kv-row"><span class="kv-label">sistema, equipo, otro</span><span class="kv-value">otros tipos</span></div>
+              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                📝 <strong>Cuándo registrar:</strong> Antes de ejecutar el cuadre. Si hay un gasto de internet de una banca específica, asignarlo a esa banca.
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">⚖️ cuadres_grupo</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">El resultado final del cuadre semanal por grupo. Se crea al hacer clic en "Guardar Cuadre".</p>
+              <div class="kv-row"><span class="kv-label">resultado_loteria</span><span class="kv-value">resultado total del grupo</span></div>
+              <div class="kv-row"><span class="kv-label">balance_pendiente_anterior</span><span class="kv-value">del cuadre previo</span></div>
+              <div class="kv-row"><span class="kv-label">total_a_depositar</span><span class="kv-value">lo que debe dar el supervisor</span></div>
+              <div class="kv-row"><span class="kv-label">balance_final</span><span class="kv-value">→ se usa como balance_anterior del próximo cuadre</span></div>
+              <div class="alert alert-success" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                ✅ <strong>Flujo:</strong> balance_final de esta semana → balance_anterior de la próxima semana (ingresar manualmente).
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">💰 prestamos</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">Préstamos/avances adicionales manuales durante la semana que no vienen del CSV.</p>
+              <div class="kv-row"><span class="kv-label">tipo: salida</span><span class="kv-value">dinero entregado al supervisor</span></div>
+              <div class="kv-row"><span class="kv-label">tipo: entrada</span><span class="kv-value">devolución del supervisor</span></div>
+              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                📝 <strong>Diferencia con avances:</strong> Los <em>avances</em> del CSV son automáticos (por banca). Los <em>préstamos</em> aquí son movimientos manuales por grupo durante la semana.
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">📈 participacion_acumulada</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">Seguimiento del arrastre de participación de beneficios por grupo.</p>
+              <div class="kv-row"><span class="kv-label">beneficio_semana</span><span class="kv-value">resultado del período</span></div>
+              <div class="kv-row"><span class="kv-label">arrastre_anterior</span><span class="kv-value">balance negativo de semanas previas</span></div>
+              <div class="kv-row"><span class="kv-label">monto_a_pagar</span><span class="kv-value">solo si balance > 0</span></div>
+              <div class="kv-row"><span class="kv-label">arrastre_siguiente</span><span class="kv-value">→ usarlo como arrastre del próximo cuadre</span></div>
+              <div class="alert alert-success" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                ✅ <strong>Se actualiza automáticamente</strong> al guardar el cuadre. El campo "Arrastre Anterior Participación" en el cuadre = arrastre_siguiente del período anterior.
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">🏦 cuenta_banco</div></div>
+            <div class="card-body" style="font-size:12px">
+              <p style="color:var(--muted);margin-bottom:10px">Registro de todos los movimientos de la cuenta bancaria de la central.</p>
+              <div class="kv-row"><span class="kv-label">tipo: ingreso</span><span class="kv-value">dinero recibido (de supervisores, etc.)</span></div>
+              <div class="kv-row"><span class="kv-label">tipo: egreso</span><span class="kv-value">dinero salido (gastos, préstamos, etc.)</span></div>
+              <div class="kv-row"><span class="kv-label">saldo_acumulado</span><span class="kv-value">calculado automáticamente al cargar</span></div>
+              <div class="kv-row"><span class="kv-label">categoria</span><span class="kv-value">cuadre, gasto_operativo, nomina, participacion, otro</span></div>
+              <div class="alert alert-info" style="margin-top:10px;margin-bottom:0;font-size:11px">
+                📝 <strong>Cuándo registrar:</strong> Cada vez que haya un movimiento real en la cuenta bancaria. Registrar los depósitos que hacen los supervisores aquí.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>

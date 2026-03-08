@@ -1,0 +1,187 @@
+      <div v-if="view==='importar'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Importar Ventas</div>
+            <div class="section-sub">Carga el archivo Excel exportado del sistema — solo se importan Ventas y Premios</div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-bottom:20px">
+          <!-- ── Cargar Archivo ── -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">📥 Cargar Archivo Excel (.xlsx)</div></div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">1. Seleccionar Período de destino</label>
+                  <select class="form-control" v-model="importPeriodoId" @change="checkImportDuplicado">
+                    <option value="">— Seleccionar Período —</option>
+                    <option v-for="p in periodos" :key="p.id" :value="p.id">
+                      {{ p.descripcion || p.fecha_inicio }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Alerta duplicado -->
+                <div v-if="importDuplicado" class="alert alert-error" style="font-size:11px">
+                  ⚠️ <strong>Este período ya tiene {{ importDuplicadoCount }} registros importados.</strong><br>
+                  Para reimportar, primero borra los datos anteriores.
+                  <button class="btn btn-danger btn-sm" style="margin-top:8px;width:100%" @click="borrarImportacion">
+                    🗑️ Borrar importación anterior y cargar de nuevo
+                  </button>
+                </div>
+                <!-- Botón borrar visible siempre que haya data (aunque no esté en flujo duplicado) -->
+                <div v-if="importPeriodoId && !importDuplicado && importPeriodoTieneData">
+                  <button class="btn btn-danger btn-sm" style="width:100%" @click="borrarImportacion">
+                    🗑️ Borrar datos importados de este período
+                  </button>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">2. Seleccionar archivo .xlsx</label>
+                  <input type="file" class="form-control" accept=".xlsx,.xls,.csv" @change="handleFile" ref="fileInput"
+                    :disabled="importDuplicado">
+                  <div style="font-size:10px;color:var(--muted);margin-top:4px">
+                    Columnas requeridas: <strong>Usuario, Ventas, Premios</strong>
+                  </div>
+                </div>
+
+                <div v-if="importPreview.length" class="alert alert-info" style="font-size:11px">
+                  ✅ <strong>{{ importPreview.length }} bancas detectadas</strong> —
+                  {{ importPreview.filter(r=>r._banca).length }} mapeadas correctamente,
+                  {{ importPreview.filter(r=>!r._banca).length }} sin mapear
+                </div>
+
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-ghost btn-sm" v-if="importPreview.length" @click="importPreview=[];importDuplicado=false">
+                    ✕ Limpiar
+                  </button>
+                  <button class="btn btn-primary" style="flex:1"
+                    @click="processImport"
+                    :disabled="!importPreview.length || !importPeriodoId || importando || importDuplicado || !importPreview.some(r=>r._banca && r._incluir)">
+                    {{ importando ? '⏳ Importando...' : '✅ Confirmar e Importar' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Ingreso Manual ── -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">📝 Ingreso Manual de Venta</div></div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Período</label>
+                    <select class="form-control" v-model="manualVenta.periodo_id">
+                      <option value="">— Período —</option>
+                      <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Banca</label>
+                    <select class="form-control" v-model="manualVenta.banca_id">
+                      <option value="">— Banca —</option>
+                      <option v-for="b in bancas" :key="b.id" :value="b.id">{{ b.codigo }} — {{ b.nombre }}</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Ventas RD$</label>
+                    <input type="number" class="form-control" v-model.number="manualVenta.ventas" placeholder="0">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Premios RD$</label>
+                    <input type="number" class="form-control" v-model.number="manualVenta.premios" placeholder="0">
+                  </div>
+                </div>
+                <div class="alert alert-info" style="font-size:11px;margin-top:4px">
+                  💡 Recargas, servicios y avances se registran por <strong>Gastos</strong> o <strong>Movimientos de Semana</strong>
+                </div>
+                <button class="btn btn-primary" @click="saveManualVenta" :disabled="!manualVenta.banca_id||!manualVenta.periodo_id">
+                  💾 Guardar Venta
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Preview editable ── -->
+        <div v-if="importPreview.length" class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Vista Previa — Revisa y edita antes de confirmar</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">
+                Puedes editar Ventas/Premios y excluir filas individualmente antes de importar
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span style="font-size:11px;color:var(--muted)">
+                Total ventas: <strong style="color:var(--accent)">{{ fmt(importPreview.filter(r=>r._incluir).reduce((s,r)=>s+r.ventas,0)) }}</strong>
+              </span>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;max-height:520px;overflow-y:auto">
+            <table>
+              <thead><tr style="position:sticky;top:0;z-index:2;background:var(--surface2)">
+                <th style="width:36px;text-align:center">✓</th>
+                <th>Usuario</th>
+                <th>Agencia</th>
+                <th>Banca mapeada</th>
+                <th style="text-align:right">Ventas</th>
+                <th style="text-align:right">Premios</th>
+                <th>Estado</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="(r,i) in importPreview" :key="i"
+                    :style="!r._banca ? 'opacity:0.5;background:rgba(255,77,109,0.04)' : ''">
+                  <td style="text-align:center">
+                    <input type="checkbox" v-model="r._incluir" :disabled="!r._banca" style="accent-color:var(--accent)">
+                  </td>
+                  <td><code style="font-size:11px">{{ r.usuario }}</code></td>
+                  <td style="font-size:11px;color:var(--muted)">{{ r.agencia }}</td>
+                  <td>
+                    <span v-if="r._banca" class="tag tag-green" style="font-size:10px">
+                      {{ r._banca.codigo }} — {{ r._banca.nombre }}
+                    </span>
+                    <span v-else class="tag tag-red" style="font-size:10px">Sin mapear</span>
+                  </td>
+                  <td style="text-align:right">
+                    <input type="number" v-model.number="r.ventas"
+                      style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:5px;padding:3px 7px;width:90px;text-align:right;font-family:var(--font-n);font-size:12px;color:var(--input-text)"
+                      :disabled="!r._banca || !r._incluir">
+                  </td>
+                  <td style="text-align:right">
+                    <input type="number" v-model.number="r.premios"
+                      style="background:var(--input-bg);border:1px solid var(--input-border);border-radius:5px;padding:3px 7px;width:90px;text-align:right;font-family:var(--font-n);font-size:12px;color:var(--input-text)"
+                      :disabled="!r._banca || !r._incluir">
+                  </td>
+                  <td>
+                    <span v-if="!r._banca" class="tag tag-red" style="font-size:9px">⚠ No encontrada</span>
+                    <span v-else-if="r._incluir" class="tag tag-green" style="font-size:9px">✓ Incluir</span>
+                    <span v-else class="tag tag-gray" style="font-size:9px">— Excluir</span>
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr class="summary-row">
+                  <td colspan="4"><strong>TOTAL A IMPORTAR</strong></td>
+                  <td style="text-align:right"><strong>{{ fmt(importPreview.filter(r=>r._incluir).reduce((s,r)=>s+r.ventas,0)) }}</strong></td>
+                  <td style="text-align:right"><strong>{{ fmt(importPreview.filter(r=>r._incluir).reduce((s,r)=>s+r.premios,0)) }}</strong></td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Bancas sin mapear -->
+        <div v-if="importPreview.some(r=>!r._banca)" class="alert alert-error" style="margin-top:14px;font-size:11px">
+          ⚠️ <strong>Bancas sin mapear:</strong>
+          {{ importPreview.filter(r=>!r._banca).map(r=>r.usuario+' ('+r.agencia+')').join(', ') }}
+          — Verifica que el campo <em>usuario_sistema</em> en la banca corresponda al código del archivo.
+        </div>
+
+      </div>

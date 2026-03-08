@@ -1,0 +1,82 @@
+      <div v-if="view==='prestamos'">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Préstamos a Supervisores</div>
+            <div class="section-sub">Control de entregas y devoluciones intra-semana</div>
+          </div>
+          <div class="export-group">
+            <button class="btn-export excel" @click="exportToExcel('tbl-prestamos','prestamos')">⬇ Excel</button>
+            <button class="btn-export pdf"   @click="exportToPDF('tbl-prestamos','Préstamos a Supervisores','prestamos')">⬇ PDF</button>
+            <button class="btn btn-primary" @click="abrirNuevoPrestamo">+ Registrar Movimiento</button>
+          </div>
+        </div>
+
+        <!-- Explicación del flujo -->
+        <div class="alert alert-info" style="margin-bottom:16px;font-size:12px;line-height:1.6">
+          <strong>📋 ¿Cómo funcionan los Movimientos de Semana?</strong><br>
+          • <strong>Préstamo (Salida) ↑</strong> — Dinero que le ENTREGAS al supervisor porque la banca perdió y necesita efectivo para operar. Suma al "Total a Depositar" del cuadre.<br>
+          • <strong>Devolución (Entrada) ↓</strong> — Dinero que el supervisor te ENTREGA antes del cuadre porque sus bancas generaron ganancias. Resta del "Total a Depositar" del cuadre.<br>
+          • Todos los movimientos del período aparecen automáticamente en el cuadre del grupo correspondiente.
+        </div>
+
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><div class="card-title">Resumen por Grupo</div></div>
+          <div class="card-body" style="padding:0">
+            <table>
+              <thead><tr><th>Grupo</th><th>Total Prestado</th><th>Total Devuelto</th><th>Saldo Pendiente</th></tr></thead>
+              <tbody>
+                <tr v-for="g in prestamosResumen" :key="g.grupo_id">
+                  <td><strong>{{ g.nombre }}</strong></td>
+                  <td class="num-neg">{{ fmt(g.salidas) }}</td>
+                  <td class="num-pos">{{ fmt(g.entradas) }}</td>
+                  <td :class="g.saldo>0?'num-neg':'num-pos'">{{ fmt(g.saldo) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Historial de Movimientos</div>
+            <div style="display:flex;gap:8px">
+              <select class="form-control" style="width:180px" v-model="prestFiltro.periodo_id" @change="loadPrestamos">
+                <option value="">— Todos los períodos —</option>
+                <option v-for="p in periodos" :key="p.id" :value="p.id">{{ p.descripcion || p.fecha_inicio }}</option>
+              </select>
+              <select class="form-control" style="width:160px" v-model="prestFiltro.grupo_id" @change="loadPrestamos">
+                <option value="">— Todos los grupos —</option>
+                <option v-for="g in grupos" :key="g.id" :value="g.id">{{ g.nombre }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="loading" v-if="loadingPrest"><div class="spinner"></div></div>
+            <div class="empty" v-else-if="!prestamos.length">
+              <div class="empty-icon">💰</div><p>Sin movimientos registrados</p>
+            </div>
+            <table v-else id="tbl-prestamos">
+              <thead><tr><th>Fecha</th><th>Grupo</th><th>Banca</th><th>Período</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="p in prestamos" :key="p.id">
+                  <td>{{ p.fecha }}</td>
+                  <td>{{ p.grupos?.nombre }}</td>
+                  <td>
+                    <span v-if="p.bancas" class="tag tag-yellow" style="font-size:10px">{{ p.bancas?.codigo }}</span>
+                    <span v-if="p.bancas" style="font-size:11px"> {{ p.bancas?.nombre }}</span>
+                    <span v-else style="color:var(--muted);font-size:11px">—</span>
+                  </td>
+                  <td>{{ p.periodos?.descripcion || p.periodos?.fecha_inicio }}</td>
+                  <td><span :class="p.tipo==='salida'?'tag tag-red':'tag tag-green'">{{ p.tipo==='salida'?'Préstamo':'Devolución' }}</span></td>
+                  <td>{{ p.concepto || '-' }}</td>
+                  <td :class="p.tipo==='salida'?'num-neg':'num-pos'">{{ fmt(p.monto) }}</td>
+                  <td style="white-space:nowrap">
+                    <button class="btn btn-ghost btn-xs" @click="editarPrestamo(p)" style="margin-right:4px">✏️</button>
+                    <button class="btn btn-danger btn-xs" @click="deletePrestamo(p.id)">✕</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
